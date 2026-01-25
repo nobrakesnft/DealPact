@@ -479,8 +479,18 @@
                             Open in MetaMask
                         </button>
                         <button class="wallet-btn" onclick="openInRabby()">
-                            <img src="https://rabby.io/assets/images/logo.svg" alt="Rabby">
+                            <svg width="24" height="24" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect width="128" height="128" rx="24" fill="#7C3AED"/>
+                                <path d="M96 48C96 39.16 88.84 32 80 32H48C39.16 32 32 39.16 32 48V80C32 88.84 39.16 96 48 96H80C88.84 96 96 88.84 96 80V48Z" fill="white"/>
+                                <circle cx="52" cy="56" r="6" fill="#7C3AED"/>
+                                <circle cx="76" cy="56" r="6" fill="#7C3AED"/>
+                                <path d="M48 72C48 72 56 80 64 80C72 80 80 72 80 72" stroke="#7C3AED" stroke-width="4" stroke-linecap="round"/>
+                            </svg>
                             Open in Rabby Wallet
+                        </button>
+                        <button class="wallet-btn" onclick="openInTrustWallet()">
+                            <img src="https://trustwallet.com/assets/images/favicon.png" alt="Trust" style="border-radius:4px">
+                            Open in Trust Wallet
                         </button>
                     </div>
 
@@ -707,11 +717,42 @@
             window.location.href = metamaskUrl;
         }
 
-        // Open in Rabby Wallet
+        // Open in Rabby Wallet (mobile app)
         function openInRabby() {
             const url = getCurrentUrl();
-            // Rabby uses a direct dApp link format
-            window.location.href = `https://rabby.io/dapp?url=${encodeURIComponent(url)}`;
+            // Try Rabby mobile deep link first
+            const rabbyDeepLink = `rabby://dapp?url=${encodeURIComponent(url)}`;
+
+            // Create a hidden iframe to try the deep link
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            document.body.appendChild(iframe);
+
+            // Try to open Rabby app
+            const start = Date.now();
+            iframe.src = rabbyDeepLink;
+
+            // Fallback: if Rabby app doesn't open within 2 seconds, redirect to app store or use WalletConnect-style URL
+            setTimeout(() => {
+                document.body.removeChild(iframe);
+                if (Date.now() - start < 2500) {
+                    // App probably opened
+                    return;
+                }
+                // Fallback to MetaMask-style deep link format that Rabby may support
+                const fallbackUrl = `https://rabby.io/dapp/${url.replace('https://', '')}`;
+                window.location.href = fallbackUrl;
+            }, 2000);
+
+            // Also try direct navigation
+            window.location.href = rabbyDeepLink;
+        }
+
+        // Open in Trust Wallet
+        function openInTrustWallet() {
+            const url = getCurrentUrl();
+            const trustUrl = `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(url)}`;
+            window.location.href = trustUrl;
         }
 
         // Show mobile wallet options
