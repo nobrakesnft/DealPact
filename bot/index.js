@@ -24,7 +24,10 @@ const ESCROW_ABI = [
   "function createDeal(string calldata _externalId, address _seller, address _buyer, uint256 _amount) external returns (uint256)",
   "function getDealByExternalId(string calldata _externalId) external view returns (tuple(string externalId, address seller, address buyer, uint256 amount, uint8 status, uint256 createdAt, uint256 completedAt))",
   "function getReputation(address _user) external view returns (uint256 completed, uint256 volume)",
-  "function externalIdToDealId(string calldata) external view returns (uint256)"
+  "function externalIdToDealId(string calldata) external view returns (uint256)",
+  "function deals(uint256) external view returns (string, address, address, uint256, uint8, uint256, uint256)",
+  "event DealFunded(uint256 indexed dealId, address buyer, uint256 amount)",
+  "event DealCompleted(uint256 indexed dealId, address seller, uint256 amount, uint256 fee)"
 ];
 
 const escrowContract = new ethers.Contract(CONTRACT_ADDRESS, ESCROW_ABI, wallet);
@@ -844,7 +847,276 @@ bot.on('message:text', async (ctx) => {
   await ctx.reply('Use /help to see available commands.');
 });
 
+// ============================================
+// BLOCKCHAIN EVENT LISTENER FOR NOTIFICATIONS
+// ============================================
+
+// Track last processed block to avoid duplicates
+let lastProcessedBlock = 0;
+
+// Listen for DealFunded events and notify parties
+async function startEventListener() {
+  console.log('Starting blockchain event listener...');
+
+  // Get current block number as starting point
+  try {
+    lastProcessedBlock = await provider.getBlockNumber() - 10; // Start from 10 blocks back
+    console.log(`Listening for events from block ${lastProcessedBlock}`);
+  } catch (e) {
+    console.error('Failed to get block number:', e.message);
+    lastProcessedBlock = 0;
+  }
+
+  // Listen for DealFunded events
+  escrowContract.on('DealFunded', async (dealId, buyer, amount, event) => {
+    console.log(`DealFunded event: dealId=${dealId}, buyer=${buyer}, amount=${amount}`);
+
+    try {
+      // Get deal details from contract
+      const deal = await escrowContract.deals(dealId);
+      const externalId = deal[0]; // TL-XXXX
+
+      if (!externalId || !externalId.startsWith('TL-')) {
+        console.log('Invalid external ID, skipping');
+        return;
+      }
+
+      // Get deal from database
+      const { data: dbDeal, error } = await supabase
+        .from('deals')
+        .select('*')
+        .eq('deal_id', externalId)
+        .single();
+
+      if (error || !dbDeal) {
+        console.log(`Deal ${externalId} not found in database`);
+        return;
+      }
+
+      // Skip if already funded
+      if (dbDeal.status === 'funded') {
+        console.log(`Deal ${externalId} already marked as funded`);
+        return;
+      }
+
+      // Update deal status to funded
+      const { error: updateError } = await supabase
+        .from('deals')
+        .update({
+          status: 'funded',
+          funded_at: new Date().toISOString(),
+          funded_tx_hash: event.transactionHash
+        })
+        .eq('deal_id', externalId);
+
+      if (updateError) {
+        console.error('Failed to update deal status:', updateError);
+        return;
+      }
+
+      console.log(`Deal ${externalId} marked as funded!`);
+
+      // Format amount (USDC has 6 decimals)
+      const amountFormatted = (Number(amount) / 1e6).toFixed(2);
+
+      // Notify seller
+      if (dbDeal.seller_telegram_id) {
+        try {
+          await bot.api.sendMessage(dbDeal.seller_telegram_id, `
+💰 Payment Received!
+
+Deal: ${externalId}
+Amount: ${amountFormatted} USDC
+Buyer: @${dbDeal.buyer_username}
+
+The buyer has funded the escrow. Deliver your goods/service now.
+
+Once delivered, the buyer will release funds with /release ${externalId}
+
+View tx: https://sepolia.basescan.org/tx/${event.transactionHash}
+          `);
+          console.log(`Notified seller (${dbDeal.seller_telegram_id})`);
+        } catch (e) {
+          console.error('Failed to notify seller:', e.message);
+        }
+      }
+
+      // Also notify buyer confirmation
+      const { data: buyerUser } = await supabase
+        .from('users')
+        .select('telegram_id')
+        .eq('username', dbDeal.buyer_username)
+        .single();
+
+      if (buyerUser?.telegram_id) {
+        try {
+          await bot.api.sendMessage(buyerUser.telegram_id, `
+✅ Deposit Confirmed!
+
+Deal: ${externalId}
+Amount: ${amountFormatted} USDC
+Seller: @${dbDeal.seller_username}
+
+Your funds are now safely locked in escrow.
+
+Once you receive your goods/service, release funds with:
+/release ${externalId}
+
+View tx: https://sepolia.basescan.org/tx/${event.transactionHash}
+          `);
+          console.log(`Notified buyer (${buyerUser.telegram_id})`);
+        } catch (e) {
+          console.error('Failed to notify buyer:', e.message);
+        }
+      }
+
+    } catch (e) {
+      console.error('Error processing DealFunded event:', e.message);
+    }
+  });
+
+  // Also listen for DealCompleted events
+  escrowContract.on('DealCompleted', async (dealId, seller, amount, fee, event) => {
+    console.log(`DealCompleted event: dealId=${dealId}`);
+
+    try {
+      const deal = await escrowContract.deals(dealId);
+      const externalId = deal[0];
+
+      if (!externalId || !externalId.startsWith('TL-')) return;
+
+      // Update database
+      await supabase
+        .from('deals')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString()
+        })
+        .eq('deal_id', externalId);
+
+      // Get deal for notifications
+      const { data: dbDeal } = await supabase
+        .from('deals')
+        .select('*')
+        .eq('deal_id', externalId)
+        .single();
+
+      if (!dbDeal) return;
+
+      const amountFormatted = (Number(amount) / 1e6).toFixed(2);
+      const feeFormatted = (Number(fee) / 1e6).toFixed(2);
+
+      // Notify seller
+      if (dbDeal.seller_telegram_id) {
+        try {
+          await bot.api.sendMessage(dbDeal.seller_telegram_id, `
+🎉 Funds Released!
+
+Deal: ${externalId}
+Amount received: ${amountFormatted} USDC
+Fee: ${feeFormatted} USDC
+
+Thank you for using TrustLock!
+
+View tx: https://sepolia.basescan.org/tx/${event.transactionHash}
+          `);
+        } catch (e) {
+          console.error('Failed to notify seller of completion:', e.message);
+        }
+      }
+
+    } catch (e) {
+      console.error('Error processing DealCompleted event:', e.message);
+    }
+  });
+
+  console.log('Event listeners active!');
+}
+
+// Polling fallback - check pending deals every 30 seconds
+async function pollPendingDeals() {
+  try {
+    // Get all pending_deposit deals that have contract_deal_id
+    const { data: pendingDeals } = await supabase
+      .from('deals')
+      .select('*')
+      .eq('status', 'pending_deposit')
+      .not('contract_deal_id', 'is', null);
+
+    if (!pendingDeals || pendingDeals.length === 0) return;
+
+    for (const dbDeal of pendingDeals) {
+      try {
+        // Check on-chain status
+        const chainDealId = await escrowContract.externalIdToDealId(dbDeal.deal_id);
+        if (chainDealId.toString() === '0') continue;
+
+        const onChainDeal = await escrowContract.deals(chainDealId);
+        const onChainStatus = Number(onChainDeal[4]); // status is 5th element
+
+        // Status: 0=Pending, 1=Funded, 2=Completed, 3=Refunded, 4=Disputed, 5=Cancelled
+        if (onChainStatus === 1 && dbDeal.status === 'pending_deposit') {
+          console.log(`Poll found funded deal: ${dbDeal.deal_id}`);
+
+          // Update status
+          await supabase
+            .from('deals')
+            .update({
+              status: 'funded',
+              funded_at: new Date().toISOString()
+            })
+            .eq('deal_id', dbDeal.deal_id);
+
+          // Notify seller
+          if (dbDeal.seller_telegram_id) {
+            await bot.api.sendMessage(dbDeal.seller_telegram_id, `
+💰 Payment Received!
+
+Deal: ${dbDeal.deal_id}
+Amount: ${dbDeal.amount} USDC
+Buyer: @${dbDeal.buyer_username}
+
+The buyer has funded the escrow. Deliver your goods/service now.
+
+Once delivered, ask buyer to release with /release ${dbDeal.deal_id}
+            `);
+          }
+
+          // Notify buyer
+          const { data: buyerUser } = await supabase
+            .from('users')
+            .select('telegram_id')
+            .eq('username', dbDeal.buyer_username)
+            .single();
+
+          if (buyerUser?.telegram_id) {
+            await bot.api.sendMessage(buyerUser.telegram_id, `
+✅ Deposit Confirmed!
+
+Deal: ${dbDeal.deal_id}
+Amount: ${dbDeal.amount} USDC
+
+Your funds are now safely locked. Release with /release ${dbDeal.deal_id} after receiving goods.
+            `);
+          }
+        }
+      } catch (e) {
+        console.error(`Error checking deal ${dbDeal.deal_id}:`, e.message);
+      }
+    }
+  } catch (e) {
+    console.error('Poll error:', e.message);
+  }
+}
+
 // Start the bot
 bot.start();
 console.log('TrustLock bot is running!');
 console.log('Contract:', CONTRACT_ADDRESS);
+
+// Start event listener
+startEventListener();
+
+// Start polling as backup (every 30 seconds)
+setInterval(pollPendingDeals, 30000);
+console.log('Polling for deal status every 30 seconds');
