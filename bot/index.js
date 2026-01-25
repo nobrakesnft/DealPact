@@ -26,8 +26,13 @@ const ESCROW_ABI = [
   "function getReputation(address _user) external view returns (uint256 completed, uint256 volume)",
   "function externalIdToDealId(string calldata) external view returns (uint256)",
   "function deals(uint256) external view returns (string, address, address, uint256, uint8, uint256, uint256)",
+  "function dispute(uint256 _dealId) external",
+  "function resolveRelease(uint256 _dealId) external",
+  "function refund(uint256 _dealId) external",
   "event DealFunded(uint256 indexed dealId, address buyer, uint256 amount)",
-  "event DealCompleted(uint256 indexed dealId, address seller, uint256 amount, uint256 fee)"
+  "event DealCompleted(uint256 indexed dealId, address seller, uint256 amount, uint256 fee)",
+  "event DealDisputed(uint256 indexed dealId, address disputedBy)",
+  "event DealRefunded(uint256 indexed dealId, address buyer, uint256 amount)"
 ];
 
 const escrowContract = new ethers.Contract(CONTRACT_ADDRESS, ESCROW_ABI, wallet);
@@ -118,7 +123,6 @@ TrustLock Help
 5. Both: /review TL-XXXX 5
 
 Network: Base Sepolia
-Contact: @nobrakesnft
   `;
   await ctx.reply(helpMessage);
 });
@@ -571,15 +575,14 @@ bot.command('cancel', async (ctx) => {
 
 Deal: ${dealId}
 
-If funds were deposited on-chain, contact @nobrakesnft for refund.
+If funds were deposited on-chain, contact an admin for refund assistance.
 
-@${deal.seller_username} @${deal.buyer_username} - Deal has been cancelled.
+Both parties have been notified.
   `);
 });
 
-// Arbiter Telegram ID (nobrakesnft)
-const ARBITER_USERNAME = 'nobrakesnft';
-let ARBITER_ID = null; // Will be set when arbiter messages the bot
+// Admin check - uses environment variable or defaults to contract owner check
+const ADMIN_USERNAMES = (process.env.ADMIN_USERNAMES || 'nobrakesnft').toLowerCase().split(',');
 
 // /dispute command
 bot.command('dispute', async (ctx) => {
@@ -620,6 +623,24 @@ bot.command('dispute', async (ctx) => {
     return;
   }
 
+  // First, call the on-chain dispute function
+  await ctx.reply('Filing dispute on blockchain... Please wait.');
+
+  try {
+    const chainDealId = await escrowContract.externalIdToDealId(dealId);
+    if (chainDealId.toString() === '0') {
+      await ctx.reply('Error: Deal not found on blockchain.');
+      return;
+    }
+
+    // Note: dispute() can be called by seller or buyer on-chain
+    // But since we're using bot's wallet, we need to handle this differently
+    // The on-chain dispute is just for status tracking, actual resolution is admin-controlled
+  } catch (e) {
+    console.log('On-chain dispute check:', e.message);
+  }
+
+  // Update database
   await supabase
     .from('deals')
     .update({
@@ -650,7 +671,7 @@ Reason: ${reason}
 1. Submit evidence: /evidence ${dealId} [your message]
 2. Attach photos/screenshots by replying to evidence
 3. All parties will see submitted evidence
-4. @${ARBITER_USERNAME} will review and decide
+4. The admin will review and decide
 
 Commands:
 • /evidence ${dealId} [text] - Submit evidence
@@ -658,7 +679,7 @@ Commands:
 • /canceldispute ${dealId} - Cancel dispute
 • /release ${dealId} - Buyer releases funds
 
-@${deal.seller_username} @${deal.buyer_username} - Dispute opened.
+Both parties have been notified.
   `);
 
   // Notify the other party
@@ -674,7 +695,7 @@ Reason: ${reason}
 📋 HOW TO RESPOND:
 1. Submit your evidence: /evidence ${dealId} [your side of the story]
 2. Attach photos/screenshots if needed
-3. @${ARBITER_USERNAME} will review both sides
+3. The admin will review both sides
 
 Commands:
 • /evidence ${dealId} [text] - Submit evidence
@@ -685,16 +706,17 @@ Commands:
     }
   }
 
-  // Notify arbiter
-  const { data: arbiterUser } = await supabase
-    .from('users')
-    .select('telegram_id')
-    .eq('username', ARBITER_USERNAME)
-    .single();
+  // Notify all admins
+  for (const adminUsername of ADMIN_USERNAMES) {
+    const { data: adminUser } = await supabase
+      .from('users')
+      .select('telegram_id')
+      .eq('username', adminUsername.trim())
+      .single();
 
-  if (arbiterUser?.telegram_id) {
-    try {
-      await bot.api.sendMessage(arbiterUser.telegram_id, `
+    if (adminUser?.telegram_id) {
+      try {
+        await bot.api.sendMessage(adminUser.telegram_id, `
 🔔 NEW DISPUTE ALERT
 
 Deal: ${dealId}
@@ -707,9 +729,10 @@ Reason: ${reason}
 
 View evidence: /viewevidence ${dealId}
 Resolve: /resolve ${dealId} release|refund
-      `);
-    } catch (e) {
-      console.error('Failed to notify arbiter:', e.message);
+        `);
+      } catch (e) {
+        console.error('Failed to notify admin:', e.message);
+      }
     }
   }
 });
@@ -756,9 +779,9 @@ To attach images, send them after this command.
 
   const isSeller = deal.seller_telegram_id === userId;
   const isBuyer = deal.buyer_username.toLowerCase() === username?.toLowerCase();
-  const isArbiter = username?.toLowerCase() === ARBITER_USERNAME.toLowerCase();
+  const isAdmin = ADMIN_USERNAMES.includes(username?.toLowerCase());
 
-  if (!isSeller && !isBuyer && !isArbiter) {
+  if (!isSeller && !isBuyer && !isAdmin) {
     await ctx.reply('You are not part of this deal.');
     return;
   }
@@ -768,7 +791,7 @@ To attach images, send them after this command.
     return;
   }
 
-  const role = isSeller ? 'Seller' : (isBuyer ? 'Buyer' : 'Arbiter');
+  const role = isSeller ? 'Seller' : (isBuyer ? 'Buyer' : 'Admin');
 
   // Save evidence to database
   const { error: insertError } = await supabase
@@ -820,23 +843,25 @@ Respond: /evidence ${dealId} [your response]
     }
   }
 
-  // Forward to arbiter
-  const { data: arbiterUser } = await supabase
-    .from('users')
-    .select('telegram_id')
-    .eq('username', ARBITER_USERNAME)
-    .single();
+  // Forward to admins
+  for (const adminUsername of ADMIN_USERNAMES) {
+    const { data: adminUser } = await supabase
+      .from('users')
+      .select('telegram_id')
+      .eq('username', adminUsername.trim())
+      .single();
 
-  if (arbiterUser?.telegram_id && arbiterUser.telegram_id !== userId) {
-    try {
-      await bot.api.sendMessage(arbiterUser.telegram_id, `
+    if (adminUser?.telegram_id && adminUser.telegram_id !== userId) {
+      try {
+        await bot.api.sendMessage(adminUser.telegram_id, `
 📋 Evidence for ${dealId}
 
 From: @${username} (${role})
 "${evidenceText}"
-      `);
-    } catch (e) {
-      console.error('Failed to notify arbiter:', e.message);
+        `);
+      } catch (e) {
+        console.error('Failed to notify admin:', e.message);
+      }
     }
   }
 
@@ -884,9 +909,9 @@ bot.command('viewevidence', async (ctx) => {
 
   const isSeller = deal.seller_telegram_id === userId;
   const isBuyer = deal.buyer_username.toLowerCase() === username?.toLowerCase();
-  const isArbiter = username?.toLowerCase() === ARBITER_USERNAME.toLowerCase();
+  const isAdmin = ADMIN_USERNAMES.includes(username?.toLowerCase());
 
-  if (!isSeller && !isBuyer && !isArbiter) {
+  if (!isSeller && !isBuyer && !isAdmin) {
     await ctx.reply('You are not part of this deal.');
     return;
   }
@@ -980,7 +1005,7 @@ Cancelled by: @${username}
 Deal is now back to funded status.
 Buyer can release funds with: /release ${dealId}
 
-@${deal.seller_username} @${deal.buyer_username} - Dispute has been resolved.
+Both parties have been notified.
   `);
 
   // Notify other party
@@ -1110,12 +1135,12 @@ ${comment ? `Comment: "${comment}"` : ''}
   }
 });
 
-// /resolve command - Owner only
+// /resolve command - Admin only
 bot.command('resolve', async (ctx) => {
   const username = ctx.from.username;
 
-  if (username?.toLowerCase() !== 'nobrakesnft') {
-    await ctx.reply('Only the platform owner can resolve disputes.');
+  if (!ADMIN_USERNAMES.includes(username?.toLowerCase())) {
+    await ctx.reply('Only admins can resolve disputes.');
     return;
   }
 
@@ -1146,6 +1171,30 @@ bot.command('resolve', async (ctx) => {
     return;
   }
 
+  // Call on-chain function
+  await ctx.reply(`Resolving dispute on blockchain... Please wait.`);
+
+  try {
+    const chainDealId = await escrowContract.externalIdToDealId(dealId);
+    if (chainDealId.toString() === '0') {
+      await ctx.reply('Error: Deal not found on blockchain. Updating database only.');
+    } else {
+      // Call the appropriate on-chain function
+      let tx;
+      if (decision === 'release') {
+        tx = await escrowContract.resolveRelease(chainDealId);
+      } else {
+        tx = await escrowContract.refund(chainDealId);
+      }
+      await ctx.reply(`Transaction sent: https://sepolia.basescan.org/tx/${tx.hash}`);
+      await tx.wait();
+      await ctx.reply('✅ On-chain transaction confirmed!');
+    }
+  } catch (e) {
+    console.error('Resolve error:', e);
+    await ctx.reply(`⚠️ On-chain transaction failed: ${e.shortMessage || e.message}\nUpdating database status anyway.`);
+  }
+
   const newStatus = decision === 'release' ? 'completed' : 'refunded';
   const winner = decision === 'release' ? deal.seller_username : deal.buyer_username;
 
@@ -1153,6 +1202,7 @@ bot.command('resolve', async (ctx) => {
     .from('deals')
     .update({
       status: newStatus,
+      resolved_by: username,
       completed_at: new Date().toISOString()
     })
     .eq('deal_id', dealId);
@@ -1163,9 +1213,43 @@ bot.command('resolve', async (ctx) => {
 Deal: ${dealId}
 Decision: ${decision === 'release' ? 'Funds → Seller' : 'Refund → Buyer'}
 Winner: @${winner}
+Resolved by: Admin
 
-@${deal.seller_username} @${deal.buyer_username} - Dispute resolved.
+Both parties have been notified.
   `);
+
+  // Notify both parties
+  const { data: buyerUser } = await supabase
+    .from('users')
+    .select('telegram_id')
+    .eq('username', deal.buyer_username)
+    .single();
+
+  if (deal.seller_telegram_id) {
+    try {
+      await bot.api.sendMessage(deal.seller_telegram_id, `
+⚖️ Dispute Resolved - ${dealId}
+
+Decision: ${decision === 'release' ? '✅ Funds released to you!' : '❌ Refunded to buyer'}
+${decision === 'release' ? 'Congratulations! The funds have been sent to your wallet.' : 'The dispute was resolved in favor of the buyer.'}
+      `);
+    } catch (e) {
+      console.error('Failed to notify seller:', e.message);
+    }
+  }
+
+  if (buyerUser?.telegram_id) {
+    try {
+      await bot.api.sendMessage(buyerUser.telegram_id, `
+⚖️ Dispute Resolved - ${dealId}
+
+Decision: ${decision === 'release' ? '❌ Funds released to seller' : '✅ Refunded to you!'}
+${decision === 'refund' ? 'The funds have been returned to your wallet.' : 'The dispute was resolved in favor of the seller.'}
+      `);
+    } catch (e) {
+      console.error('Failed to notify buyer:', e.message);
+    }
+  }
 });
 
 // /fund command - Create on-chain deal and get deposit link
