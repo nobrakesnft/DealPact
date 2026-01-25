@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrustLock - Trader Profile</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .logo h1 {
+            font-size: 2rem;
+            background: linear-gradient(90deg, #00d9ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .logo p { color: #666; font-size: 0.85rem; margin-top: 4px; }
+        .card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 16px;
+        }
+        .profile-header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #00d9ff, #00ff88);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            margin: 0 auto 16px;
+        }
+        .username {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .badge-elite { background: linear-gradient(135deg, #667eea, #764ba2); }
+        .badge-gold { background: linear-gradient(135deg, #f093fb, #f5576c); }
+        .badge-trusted { background: rgba(0,217,255,0.2); color: #00d9ff; }
+        .badge-verified { background: rgba(0,255,136,0.2); color: #00ff88; }
+        .badge-active { background: rgba(255,255,255,0.1); color: #888; }
+        .badge-new { background: rgba(255,255,255,0.05); color: #666; }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin: 24px 0;
+        }
+        .stat {
+            text-align: center;
+            padding: 16px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+        }
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #00d9ff;
+        }
+        .stat-label {
+            font-size: 0.75rem;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .rating-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .rating-card {
+            padding: 16px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 12px;
+            text-align: center;
+        }
+        .rating-card h4 {
+            font-size: 0.8rem;
+            color: #888;
+            margin-bottom: 8px;
+        }
+        .stars {
+            font-size: 1.2rem;
+            color: #ffc107;
+        }
+        .rating-count {
+            font-size: 0.75rem;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .review {
+            padding: 16px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 12px;
+            margin-bottom: 12px;
+        }
+        .review-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        .review-from {
+            font-size: 0.85rem;
+            color: #00d9ff;
+        }
+        .review-role {
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            color: #888;
+        }
+        .review-stars {
+            color: #ffc107;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+        }
+        .review-text {
+            font-size: 0.9rem;
+            color: #ccc;
+            font-style: italic;
+        }
+        .review-deal {
+            font-size: 0.75rem;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        .section-title {
+            font-size: 0.8rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 24px;
+        }
+        .search-box input {
+            flex: 1;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 2px solid rgba(255,255,255,0.1);
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+            font-size: 1rem;
+        }
+        .search-box input:focus {
+            outline: none;
+            border-color: #00d9ff;
+        }
+        .search-box button {
+            padding: 14px 24px;
+            border-radius: 12px;
+            border: none;
+            background: linear-gradient(135deg, #00d9ff, #00ff88);
+            color: #0a0a0f;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .telegram-cta {
+            text-align: center;
+            padding: 24px;
+            background: rgba(0,217,255,0.1);
+            border-radius: 12px;
+            margin-top: 24px;
+        }
+        .telegram-cta a {
+            color: #00d9ff;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .hidden { display: none !important; }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top-color: #00d9ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h1>TrustLock</h1>
+            <p>Trader Reputation & Reviews</p>
+        </div>
+
+        <!-- Search -->
+        <div class="card">
+            <div class="search-box">
+                <input type="text" id="search-input" placeholder="Enter username (e.g., johndoe)" />
+                <button onclick="searchUser()">Search</button>
+            </div>
+            <p style="text-align:center;color:#666;font-size:0.8rem;">
+                Search for a trader to view their reputation and reviews
+            </p>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading" class="card hidden">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Loading profile...</p>
+            </div>
+        </div>
+
+        <!-- Profile -->
+        <div id="profile-section" class="hidden">
+            <div class="card">
+                <div class="profile-header">
+                    <div class="avatar" id="avatar">👤</div>
+                    <div class="username" id="username">@username</div>
+                    <span class="badge badge-new" id="badge">New</span>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat">
+                        <div class="stat-value" id="stat-deals">0</div>
+                        <div class="stat-label">Deals</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="stat-volume">0</div>
+                        <div class="stat-label">USDC Volume</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="stat-disputes">0</div>
+                        <div class="stat-label">Disputes</div>
+                    </div>
+                </div>
+
+                <div class="rating-section">
+                    <div class="rating-card">
+                        <h4>As Seller</h4>
+                        <div class="stars" id="seller-stars">-</div>
+                        <div class="rating-count" id="seller-count">0 reviews</div>
+                    </div>
+                    <div class="rating-card">
+                        <h4>As Buyer</h4>
+                        <div class="stars" id="buyer-stars">-</div>
+                        <div class="rating-count" id="buyer-count">0 reviews</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="section-title">Recent Reviews</div>
+                <div id="reviews-list">
+                    <div class="empty-state">No reviews yet</div>
+                </div>
+            </div>
+
+            <div class="telegram-cta">
+                <p>Get full details on Telegram:</p>
+                <p><a href="https://t.me/trustlocker_bot" target="_blank">@trustlocker_bot</a></p>
+                <p style="margin-top:8px;font-size:0.8rem;color:#666;">
+                    Use /rep @username and /reviews @username
+                </p>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="empty-state" class="card hidden">
+            <div class="empty-state">
+                <p style="font-size:1.2rem;margin-bottom:8px;">User not found</p>
+                <p>This user hasn't registered on TrustLock yet.</p>
+            </div>
+        </div>
+
+        <!-- No Search -->
+        <div id="no-search" class="card">
+            <div class="telegram-cta">
+                <p style="margin-bottom:16px;">Check any trader's reputation before dealing!</p>
+                <p>For full details, use our Telegram bot:</p>
+                <p style="margin-top:8px;"><a href="https://t.me/trustlocker_bot" target="_blank">@trustlocker_bot</a></p>
+                <p style="margin-top:16px;font-size:0.85rem;color:#888;">
+                    Commands: /rep @username, /reviews @username, /leaderboard
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // This is a simplified version - in production you'd have a backend API
+        // For now, it shows the search UI and directs users to Telegram for full data
+
+        function searchUser() {
+            const input = document.getElementById('search-input').value.trim().replace('@', '');
+            if (!input) return;
+
+            // Update URL
+            window.history.pushState({}, '', `?user=${input}`);
+
+            // Show loading
+            document.getElementById('no-search').classList.add('hidden');
+            document.getElementById('empty-state').classList.add('hidden');
+            document.getElementById('profile-section').classList.add('hidden');
+            document.getElementById('loading').classList.remove('hidden');
+
+            // Simulate loading (in production, this would be an API call)
+            setTimeout(() => {
+                showProfile(input);
+            }, 1000);
+        }
+
+        function showProfile(username) {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('profile-section').classList.remove('hidden');
+
+            // Set username
+            document.getElementById('username').textContent = `@${username}`;
+            document.getElementById('avatar').textContent = username[0].toUpperCase();
+
+            // Since we don't have direct DB access from frontend,
+            // show placeholder data and encourage Telegram usage
+            document.getElementById('stat-deals').textContent = '?';
+            document.getElementById('stat-volume').textContent = '?';
+            document.getElementById('stat-disputes').textContent = '?';
+            document.getElementById('badge').textContent = 'Check on Telegram';
+            document.getElementById('badge').className = 'badge badge-active';
+
+            document.getElementById('seller-stars').textContent = '?';
+            document.getElementById('buyer-stars').textContent = '?';
+            document.getElementById('seller-count').textContent = 'Use /rep @' + username;
+            document.getElementById('buyer-count').textContent = 'on Telegram bot';
+
+            document.getElementById('reviews-list').innerHTML = `
+                <div class="empty-state">
+                    <p style="margin-bottom:16px;">Reviews are available via Telegram</p>
+                    <p style="font-size:0.85rem;color:#888;">
+                        Use <strong>/reviews @${username}</strong> in the bot
+                    </p>
+                </div>
+            `;
+        }
+
+        // Check URL params on load
+        window.onload = function() {
+            const params = new URLSearchParams(window.location.search);
+            const user = params.get('user');
+            if (user) {
+                document.getElementById('search-input').value = user;
+                document.getElementById('no-search').classList.add('hidden');
+                document.getElementById('loading').classList.remove('hidden');
+                setTimeout(() => showProfile(user), 500);
+            }
+        };
+
+        // Enter key to search
+        document.getElementById('search-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') searchUser();
+        });
+    </script>
+</body>
+</html>

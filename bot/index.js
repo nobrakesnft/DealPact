@@ -87,38 +87,38 @@ bot.command('help', async (ctx) => {
   const helpMessage = `
 TrustLock Help
 
-Setup:
-/wallet 0x... - Register your Base wallet
+🔧 SETUP
+/wallet 0x... - Register your wallet
 
-Deal Commands:
-/new @buyer 100 Logo design - Create escrow
-/fund TL-XXXX - Get deposit link (buyer)
+💼 DEALS
+/new @buyer 100 description - Create escrow
+/fund TL-XXXX - Get deposit link
 /status TL-XXXX - Check deal status
-/deals - View your active deals
-/release TL-XXXX - Release funds (buyer only)
+/deals - View your deals
+/release TL-XXXX - Release funds
 /cancel TL-XXXX - Cancel deal
 
-Disputes:
-/dispute TL-XXXX reason - Flag a problem
-/canceldispute TL-XXXX - Cancel your dispute
+⚠️ DISPUTES
+/dispute TL-XXXX reason - Open dispute
+/evidence TL-XXXX message - Submit evidence
+/viewevidence TL-XXXX - View all evidence
+/canceldispute TL-XXXX - Cancel dispute
 
-Reviews:
-/review TL-XXXX 5 Great seller! - Rate 1-5
-/rep - Check reputation
-/rep @username - Check someone's rep
+⭐ REPUTATION
+/review TL-XXXX 5 Great! - Leave review
+/reviews @user - View reviews
+/rep @user - Check reputation
+/leaderboard - Top traders
 
-Example flow:
-1. /wallet 0xYourAddress
-2. Seller: /new @buyer 50 Logo design
-3. Buyer: /fund TL-XXXX → Click deposit link
-4. Seller delivers work
-5. Buyer: /release TL-XXXX
-6. Both: /review TL-XXXX 5 Great!
+📋 FLOW
+1. Seller: /new @buyer 50 Logo
+2. Buyer: /fund TL-XXXX → Pay
+3. Seller delivers
+4. Buyer: /release TL-XXXX
+5. Both: /review TL-XXXX 5
 
-Contract: ${CONTRACT_ADDRESS}
-Network: Base Sepolia (Testnet)
-
-Questions? Contact @nobrakesnft
+Network: Base Sepolia
+Contact: @nobrakesnft
   `;
   await ctx.reply(helpMessage);
 });
@@ -568,6 +568,10 @@ If funds were deposited on-chain, contact @nobrakesnft for refund.
   `);
 });
 
+// Arbiter Telegram ID (nobrakesnft)
+const ARBITER_USERNAME = 'nobrakesnft';
+let ARBITER_ID = null; // Will be set when arbiter messages the bot
+
 // /dispute command
 bot.command('dispute', async (ctx) => {
   const userId = ctx.from.id;
@@ -619,6 +623,13 @@ bot.command('dispute', async (ctx) => {
 
   const disputedBy = isSeller ? 'Seller' : 'Buyer';
 
+  // Get buyer's telegram ID
+  const { data: buyerUser } = await supabase
+    .from('users')
+    .select('telegram_id')
+    .eq('username', deal.buyer_username)
+    .single();
+
   await ctx.reply(`
 ⚠️ Dispute Filed
 
@@ -626,18 +637,23 @@ Deal: ${dealId}
 Filed by: ${disputedBy} (@${username})
 Reason: ${reason}
 
-Funds are locked. Platform owner will review.
+📋 DISPUTE RESOLUTION PROCESS:
+1. Submit evidence: /evidence ${dealId} [your message]
+2. Attach photos/screenshots by replying to evidence
+3. All parties will see submitted evidence
+4. @${ARBITER_USERNAME} will review and decide
 
-@${deal.seller_username} @${deal.buyer_username} - Deal under dispute.
+Commands:
+• /evidence ${dealId} [text] - Submit evidence
+• /viewevidence ${dealId} - View all evidence
+• /canceldispute ${dealId} - Cancel dispute
+• /release ${dealId} - Buyer releases funds
 
-To cancel this dispute: /canceldispute ${dealId}
-Or buyer can release funds: /release ${dealId}
-
-Contact @nobrakesnft for resolution.
+@${deal.seller_username} @${deal.buyer_username} - Dispute opened.
   `);
 
   // Notify the other party
-  const otherPartyId = isSeller ? null : deal.seller_telegram_id;
+  const otherPartyId = isSeller ? buyerUser?.telegram_id : deal.seller_telegram_id;
   if (otherPartyId) {
     try {
       await bot.api.sendMessage(otherPartyId, `
@@ -646,13 +662,259 @@ Contact @nobrakesnft for resolution.
 By: @${username} (${disputedBy})
 Reason: ${reason}
 
-Respond or provide evidence to @nobrakesnft
-Or cancel dispute: /canceldispute ${dealId}
+📋 HOW TO RESPOND:
+1. Submit your evidence: /evidence ${dealId} [your side of the story]
+2. Attach photos/screenshots if needed
+3. @${ARBITER_USERNAME} will review both sides
+
+Commands:
+• /evidence ${dealId} [text] - Submit evidence
+• /viewevidence ${dealId} - View all evidence
       `);
     } catch (e) {
       console.error('Failed to notify other party:', e.message);
     }
   }
+
+  // Notify arbiter
+  const { data: arbiterUser } = await supabase
+    .from('users')
+    .select('telegram_id')
+    .eq('username', ARBITER_USERNAME)
+    .single();
+
+  if (arbiterUser?.telegram_id) {
+    try {
+      await bot.api.sendMessage(arbiterUser.telegram_id, `
+🔔 NEW DISPUTE ALERT
+
+Deal: ${dealId}
+Amount: ${deal.amount} USDC
+Seller: @${deal.seller_username}
+Buyer: @${deal.buyer_username}
+
+Filed by: ${disputedBy} (@${username})
+Reason: ${reason}
+
+View evidence: /viewevidence ${dealId}
+Resolve: /resolve ${dealId} release|refund
+      `);
+    } catch (e) {
+      console.error('Failed to notify arbiter:', e.message);
+    }
+  }
+});
+
+// /evidence command - Submit evidence for a dispute
+bot.command('evidence', async (ctx) => {
+  const userId = ctx.from.id;
+  const username = ctx.from.username;
+  const text = ctx.message.text;
+  const match = text.match(/^\/evidence\s+(TL-\w+)(?:\s+(.+))?$/i);
+
+  if (!match) {
+    await ctx.reply(`
+📎 Submit Evidence
+
+Usage: /evidence TL-XXXX [your message]
+
+Example:
+/evidence TL-ABCD I delivered the logo on time, here's proof
+
+To attach images, send them after this command.
+    `);
+    return;
+  }
+
+  const dealId = match[1].toUpperCase();
+  const evidenceText = match[2] || '';
+
+  const { data: deal, error } = await supabase
+    .from('deals')
+    .select('*')
+    .eq('deal_id', dealId)
+    .single();
+
+  if (error || !deal) {
+    await ctx.reply(`Deal ${dealId} not found.`);
+    return;
+  }
+
+  if (deal.status !== 'disputed') {
+    await ctx.reply('Can only submit evidence for disputed deals.');
+    return;
+  }
+
+  const isSeller = deal.seller_telegram_id === userId;
+  const isBuyer = deal.buyer_username.toLowerCase() === username?.toLowerCase();
+  const isArbiter = username?.toLowerCase() === ARBITER_USERNAME.toLowerCase();
+
+  if (!isSeller && !isBuyer && !isArbiter) {
+    await ctx.reply('You are not part of this deal.');
+    return;
+  }
+
+  if (!evidenceText) {
+    await ctx.reply('Please include your evidence message. Example:\n/evidence ' + dealId + ' I sent the item on Monday, tracking #12345');
+    return;
+  }
+
+  const role = isSeller ? 'Seller' : (isBuyer ? 'Buyer' : 'Arbiter');
+
+  // Save evidence to database
+  const { error: insertError } = await supabase
+    .from('evidence')
+    .insert({
+      deal_id: dealId,
+      submitted_by: username,
+      role: role,
+      content: evidenceText,
+      telegram_id: userId
+    });
+
+  if (insertError) {
+    console.error('Evidence insert error:', insertError);
+    // Table might not exist, continue anyway
+  }
+
+  await ctx.reply(`
+✅ Evidence Submitted
+
+Deal: ${dealId}
+From: @${username} (${role})
+Evidence: "${evidenceText}"
+
+This has been shared with all parties.
+  `);
+
+  // Forward to other party
+  const { data: buyerUser } = await supabase
+    .from('users')
+    .select('telegram_id')
+    .eq('username', deal.buyer_username)
+    .single();
+
+  const otherPartyId = isSeller ? buyerUser?.telegram_id : deal.seller_telegram_id;
+
+  if (otherPartyId && otherPartyId !== userId) {
+    try {
+      await bot.api.sendMessage(otherPartyId, `
+📋 New Evidence for ${dealId}
+
+From: @${username} (${role})
+"${evidenceText}"
+
+Respond: /evidence ${dealId} [your response]
+      `);
+    } catch (e) {
+      console.error('Failed to forward evidence:', e.message);
+    }
+  }
+
+  // Forward to arbiter
+  const { data: arbiterUser } = await supabase
+    .from('users')
+    .select('telegram_id')
+    .eq('username', ARBITER_USERNAME)
+    .single();
+
+  if (arbiterUser?.telegram_id && arbiterUser.telegram_id !== userId) {
+    try {
+      await bot.api.sendMessage(arbiterUser.telegram_id, `
+📋 Evidence for ${dealId}
+
+From: @${username} (${role})
+"${evidenceText}"
+      `);
+    } catch (e) {
+      console.error('Failed to notify arbiter:', e.message);
+    }
+  }
+
+  // Forward to the other other party (if buyer submitted, also tell seller)
+  if (!isSeller && deal.seller_telegram_id && deal.seller_telegram_id !== userId) {
+    try {
+      await bot.api.sendMessage(deal.seller_telegram_id, `
+📋 New Evidence for ${dealId}
+
+From: @${username} (${role})
+"${evidenceText}"
+
+Respond: /evidence ${dealId} [your response]
+      `);
+    } catch (e) {
+      console.error('Failed to forward to seller:', e.message);
+    }
+  }
+});
+
+// /viewevidence command - View all evidence for a dispute
+bot.command('viewevidence', async (ctx) => {
+  const userId = ctx.from.id;
+  const username = ctx.from.username;
+  const text = ctx.message.text;
+  const match = text.match(/^\/viewevidence\s+(TL-\w+)$/i);
+
+  if (!match) {
+    await ctx.reply('Usage: /viewevidence TL-XXXX');
+    return;
+  }
+
+  const dealId = match[1].toUpperCase();
+
+  const { data: deal, error } = await supabase
+    .from('deals')
+    .select('*')
+    .eq('deal_id', dealId)
+    .single();
+
+  if (error || !deal) {
+    await ctx.reply(`Deal ${dealId} not found.`);
+    return;
+  }
+
+  const isSeller = deal.seller_telegram_id === userId;
+  const isBuyer = deal.buyer_username.toLowerCase() === username?.toLowerCase();
+  const isArbiter = username?.toLowerCase() === ARBITER_USERNAME.toLowerCase();
+
+  if (!isSeller && !isBuyer && !isArbiter) {
+    await ctx.reply('You are not part of this deal.');
+    return;
+  }
+
+  // Get evidence from database
+  const { data: evidence } = await supabase
+    .from('evidence')
+    .select('*')
+    .eq('deal_id', dealId)
+    .order('created_at', { ascending: true });
+
+  let message = `
+📋 Evidence for ${dealId}
+
+Deal: ${deal.amount} USDC
+Seller: @${deal.seller_username}
+Buyer: @${deal.buyer_username}
+Disputed by: @${deal.disputed_by || 'Unknown'}
+Reason: ${deal.dispute_reason || 'No reason'}
+
+━━━━━━━━━━━━━━━
+`;
+
+  if (!evidence || evidence.length === 0) {
+    message += '\nNo evidence submitted yet.\n\nSubmit: /evidence ' + dealId + ' [message]';
+  } else {
+    for (const e of evidence) {
+      const time = new Date(e.created_at).toLocaleString();
+      message += `
+[${e.role}] @${e.submitted_by}
+${time}
+"${e.content}"
+━━━━━━━━━━━━━━━`;
+    }
+  }
+
+  await ctx.reply(message);
 });
 
 // /canceldispute command - Cancel a dispute you opened
@@ -1048,6 +1310,30 @@ That's it! Funds will be locked in escrow.
   }
 });
 
+// Helper: Calculate trust badge
+function getTrustBadge(completedDeals, disputes, volume) {
+  if (completedDeals >= 50 && disputes === 0 && volume >= 5000) {
+    return { badge: '💎 Elite Trader', color: 'elite', level: 5 };
+  } else if (completedDeals >= 25 && disputes === 0 && volume >= 1000) {
+    return { badge: '🏆 Top Trader', color: 'gold', level: 4 };
+  } else if (completedDeals >= 10 && disputes === 0) {
+    return { badge: '⭐ Trusted', color: 'trusted', level: 3 };
+  } else if (completedDeals >= 3) {
+    return { badge: '✓ Verified', color: 'verified', level: 2 };
+  } else if (completedDeals >= 1) {
+    return { badge: '👤 Active', color: 'active', level: 1 };
+  }
+  return { badge: '🆕 New', color: 'new', level: 0 };
+}
+
+// Helper: Calculate average rating
+function calculateAvgRating(deals, asRole) {
+  const ratingField = asRole === 'seller' ? 'buyer_rating' : 'seller_rating';
+  const ratings = deals.filter(d => d[ratingField]).map(d => d[ratingField]);
+  if (ratings.length === 0) return null;
+  return (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1);
+}
+
 // /rep command - Check reputation
 bot.command('rep', async (ctx) => {
   const userId = ctx.from.id;
@@ -1070,10 +1356,10 @@ bot.command('rep', async (ctx) => {
     return;
   }
 
-  // Count deals
+  // Get all completed deals with ratings
   const { data: completedDeals } = await supabase
     .from('deals')
-    .select('amount')
+    .select('*')
     .or(`seller_username.eq.${targetUsername},buyer_username.eq.${targetUsername}`)
     .eq('status', 'completed');
 
@@ -1087,23 +1373,156 @@ bot.command('rep', async (ctx) => {
   const totalVolume = completedDeals?.reduce((sum, d) => sum + parseFloat(d.amount), 0) || 0;
   const disputes = disputedDeals?.length || 0;
 
-  // Calculate trust level
-  let trustLevel = '🆕 New';
-  if (totalDeals >= 10 && disputes === 0) trustLevel = '⭐ Trusted';
-  else if (totalDeals >= 5) trustLevel = '✓ Verified';
-  else if (totalDeals >= 1) trustLevel = '👤 Active';
+  // Deals as seller vs buyer
+  const dealsAsSeller = completedDeals?.filter(d => d.seller_username.toLowerCase() === targetUsername.toLowerCase()) || [];
+  const dealsAsBuyer = completedDeals?.filter(d => d.buyer_username.toLowerCase() === targetUsername.toLowerCase()) || [];
+
+  // Calculate ratings
+  const sellerRating = calculateAvgRating(dealsAsSeller, 'seller');
+  const buyerRating = calculateAvgRating(dealsAsBuyer, 'buyer');
+
+  // Get trust badge
+  const { badge } = getTrustBadge(totalDeals, disputes, totalVolume);
+
+  // Star display helper
+  const starDisplay = (rating) => {
+    if (!rating) return 'No ratings yet';
+    const stars = '⭐'.repeat(Math.round(parseFloat(rating)));
+    return `${stars} ${rating}/5`;
+  };
+
+  const profileUrl = `https://nobrakesnft.github.io/TrustLock/profile?user=${targetUsername}`;
 
   await ctx.reply(`
 📊 Reputation: @${targetUsername}
 
-${trustLevel}
+${badge}
 
-Completed deals: ${totalDeals}
-Total volume: ${totalVolume.toFixed(2)} USDC
+━━━━━━━━━━━━━━━
+📈 STATS
+Completed: ${totalDeals} deals
+Volume: ${totalVolume.toFixed(2)} USDC
 Disputes: ${disputes}
 
-Wallet: ${user.wallet_address || 'Not registered'}
+━━━━━━━━━━━━━━━
+⭐ RATINGS
+As Seller (${dealsAsSeller.length} deals): ${starDisplay(sellerRating)}
+As Buyer (${dealsAsBuyer.length} deals): ${starDisplay(buyerRating)}
+
+━━━━━━━━━━━━━━━
+View reviews: /reviews @${targetUsername}
+Full profile: ${profileUrl}
   `);
+});
+
+// /reviews command - View someone's reviews
+bot.command('reviews', async (ctx) => {
+  const text = ctx.message.text;
+  const username = ctx.from.username;
+
+  const match = text.match(/^\/reviews(?:\s+@(\w+))?$/i);
+  const targetUsername = match?.[1] || username;
+
+  // Get completed deals with reviews
+  const { data: deals } = await supabase
+    .from('deals')
+    .select('*')
+    .or(`seller_username.eq.${targetUsername},buyer_username.eq.${targetUsername}`)
+    .eq('status', 'completed')
+    .order('completed_at', { ascending: false })
+    .limit(10);
+
+  if (!deals || deals.length === 0) {
+    await ctx.reply(`@${targetUsername} has no completed deals yet.`);
+    return;
+  }
+
+  let message = `📝 Reviews for @${targetUsername}\n\n`;
+
+  let reviewCount = 0;
+  for (const deal of deals) {
+    const isSeller = deal.seller_username.toLowerCase() === targetUsername.toLowerCase();
+
+    // Get the review ABOUT this user (from the other party)
+    const rating = isSeller ? deal.buyer_rating : deal.seller_rating;
+    const review = isSeller ? deal.buyer_review : deal.seller_review;
+    const reviewer = isSeller ? deal.buyer_username : deal.seller_username;
+    const role = isSeller ? 'Seller' : 'Buyer';
+
+    if (rating) {
+      reviewCount++;
+      const stars = '⭐'.repeat(rating);
+      message += `${stars} (${rating}/5) as ${role}\n`;
+      message += `From: @${reviewer}\n`;
+      if (review && review !== 'No comment') {
+        message += `"${review}"\n`;
+      }
+      message += `Deal: ${deal.deal_id} | ${deal.amount} USDC\n\n`;
+    }
+  }
+
+  if (reviewCount === 0) {
+    message += 'No reviews yet. Reviews are left after completed deals.';
+  } else {
+    message += `━━━━━━━━━━━━━━━\nShowing ${reviewCount} most recent reviews`;
+  }
+
+  const profileUrl = `https://nobrakesnft.github.io/TrustLock/profile?user=${targetUsername}`;
+  message += `\n\nFull profile: ${profileUrl}`;
+
+  await ctx.reply(message);
+});
+
+// /leaderboard command - Top traders
+bot.command('leaderboard', async (ctx) => {
+  // Get all completed deals
+  const { data: deals } = await supabase
+    .from('deals')
+    .select('seller_username, buyer_username, amount')
+    .eq('status', 'completed');
+
+  if (!deals || deals.length === 0) {
+    await ctx.reply('No completed deals yet. Be the first!');
+    return;
+  }
+
+  // Aggregate by user
+  const userStats = {};
+  for (const deal of deals) {
+    // Count for seller
+    if (!userStats[deal.seller_username]) {
+      userStats[deal.seller_username] = { deals: 0, volume: 0 };
+    }
+    userStats[deal.seller_username].deals++;
+    userStats[deal.seller_username].volume += parseFloat(deal.amount);
+
+    // Count for buyer
+    if (!userStats[deal.buyer_username]) {
+      userStats[deal.buyer_username] = { deals: 0, volume: 0 };
+    }
+    userStats[deal.buyer_username].deals++;
+    userStats[deal.buyer_username].volume += parseFloat(deal.amount);
+  }
+
+  // Sort by volume
+  const sorted = Object.entries(userStats)
+    .sort((a, b) => b[1].volume - a[1].volume)
+    .slice(0, 10);
+
+  let message = `🏆 TrustLock Leaderboard\n\n`;
+
+  const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+
+  for (let i = 0; i < sorted.length; i++) {
+    const [username, stats] = sorted[i];
+    const { badge } = getTrustBadge(stats.deals, 0, stats.volume);
+    message += `${medals[i]} @${username}\n`;
+    message += `   ${badge} | ${stats.deals} deals | ${stats.volume.toFixed(0)} USDC\n\n`;
+  }
+
+  message += `━━━━━━━━━━━━━━━\nCheck your rank: /rep`;
+
+  await ctx.reply(message);
 });
 
 // Handle unknown text

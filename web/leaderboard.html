@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrustLock - Leaderboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .logo h1 {
+            font-size: 2rem;
+            background: linear-gradient(90deg, #00d9ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .logo p { color: #666; font-size: 0.85rem; margin-top: 4px; }
+        .card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 16px;
+        }
+        .section-title {
+            font-size: 1rem;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .leaderboard-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 12px;
+            margin-bottom: 12px;
+            transition: transform 0.2s;
+        }
+        .leaderboard-item:hover {
+            transform: translateX(4px);
+        }
+        .rank {
+            font-size: 1.5rem;
+            width: 40px;
+            text-align: center;
+        }
+        .rank-1 { color: #ffd700; }
+        .rank-2 { color: #c0c0c0; }
+        .rank-3 { color: #cd7f32; }
+
+        .trader-info {
+            flex: 1;
+        }
+        .trader-name {
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 4px;
+        }
+        .trader-badge {
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.1);
+            color: #888;
+        }
+        .badge-elite { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; }
+        .badge-gold { background: linear-gradient(135deg, #f093fb, #f5576c); color: #fff; }
+        .badge-trusted { background: rgba(0,217,255,0.2); color: #00d9ff; }
+
+        .trader-stats {
+            text-align: right;
+        }
+        .volume {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #00ff88;
+        }
+        .deals {
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .telegram-cta {
+            text-align: center;
+            padding: 24px;
+            background: rgba(0,217,255,0.1);
+            border-radius: 12px;
+        }
+        .telegram-cta a {
+            color: #00d9ff;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            margin-bottom: 24px;
+        }
+        .nav-links a {
+            color: #888;
+            text-decoration: none;
+            font-size: 0.9rem;
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.05);
+            transition: all 0.2s;
+        }
+        .nav-links a:hover, .nav-links a.active {
+            color: #00d9ff;
+            background: rgba(0,217,255,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h1>TrustLock</h1>
+            <p>Top Traders Leaderboard</p>
+        </div>
+
+        <div class="nav-links">
+            <a href="index.html">Deposit</a>
+            <a href="profile.html">Profiles</a>
+            <a href="leaderboard.html" class="active">Leaderboard</a>
+        </div>
+
+        <div class="card">
+            <div class="section-title">
+                <span>🏆</span> Top Traders by Volume
+            </div>
+
+            <div id="leaderboard">
+                <!-- Sample data - in production this would come from API -->
+                <div class="leaderboard-item">
+                    <div class="rank rank-1">🥇</div>
+                    <div class="trader-info">
+                        <div class="trader-name">@nobrakesnft</div>
+                        <span class="trader-badge badge-elite">💎 Elite</span>
+                    </div>
+                    <div class="trader-stats">
+                        <div class="volume">1,250 USDC</div>
+                        <div class="deals">15 deals</div>
+                    </div>
+                </div>
+
+                <div class="leaderboard-item">
+                    <div class="rank rank-2">🥈</div>
+                    <div class="trader-info">
+                        <div class="trader-name">@trader2</div>
+                        <span class="trader-badge badge-gold">🏆 Top</span>
+                    </div>
+                    <div class="trader-stats">
+                        <div class="volume">890 USDC</div>
+                        <div class="deals">12 deals</div>
+                    </div>
+                </div>
+
+                <div class="leaderboard-item">
+                    <div class="rank rank-3">🥉</div>
+                    <div class="trader-info">
+                        <div class="trader-name">@trader3</div>
+                        <span class="trader-badge badge-trusted">⭐ Trusted</span>
+                    </div>
+                    <div class="trader-stats">
+                        <div class="volume">650 USDC</div>
+                        <div class="deals">8 deals</div>
+                    </div>
+                </div>
+            </div>
+
+            <p style="text-align:center;color:#666;font-size:0.8rem;margin-top:20px;">
+                * Sample data. Use Telegram for live leaderboard.
+            </p>
+        </div>
+
+        <div class="card telegram-cta">
+            <p style="margin-bottom:12px;">Get the live leaderboard on Telegram:</p>
+            <p><a href="https://t.me/trustlocker_bot" target="_blank">@trustlocker_bot</a></p>
+            <p style="margin-top:12px;font-size:0.85rem;color:#888;">
+                Use <strong>/leaderboard</strong> command
+            </p>
+        </div>
+
+        <div class="card">
+            <div class="section-title">
+                <span>💎</span> Trust Badges
+            </div>
+            <div style="display:grid;gap:12px;">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <span class="trader-badge badge-elite">💎 Elite</span>
+                    <span style="color:#888;font-size:0.85rem;">50+ deals, 0 disputes, $5000+ volume</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <span class="trader-badge badge-gold">🏆 Top</span>
+                    <span style="color:#888;font-size:0.85rem;">25+ deals, 0 disputes, $1000+ volume</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <span class="trader-badge badge-trusted">⭐ Trusted</span>
+                    <span style="color:#888;font-size:0.85rem;">10+ deals, 0 disputes</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <span class="trader-badge">✓ Verified</span>
+                    <span style="color:#888;font-size:0.85rem;">3+ completed deals</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <span class="trader-badge" style="background:rgba(255,255,255,0.05);">🆕 New</span>
+                    <span style="color:#888;font-size:0.85rem;">Just getting started</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
