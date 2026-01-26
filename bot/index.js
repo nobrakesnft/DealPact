@@ -472,6 +472,71 @@ bot.command('evidence', async (ctx) => {
   }
 });
 
+// Photo evidence handler - send photo with caption: TL-XXXX description
+bot.on('message:photo', async (ctx) => {
+  const userId = ctx.from.id;
+  const username = ctx.from.username;
+  const caption = ctx.message.caption || '';
+
+  // Check if caption contains a deal ID
+  const match = caption.match(/^(TL-\w+)(?:\s+(.*))?$/i);
+  if (!match) {
+    return ctx.reply(`📸 To submit photo evidence:\n\n1. Send a photo\n2. Add caption: TL-XXXX your description\n\nExample caption: TL-A7X9 Screenshot of payment confirmation`);
+  }
+
+  const { deal } = await getDeal(match[1]);
+  if (!deal) return ctx.reply('Deal not found. Check the deal ID in your caption.');
+  if (deal.status !== 'disputed') {
+    return ctx.reply(`Cannot submit evidence.\n\nDeal status: ${deal.status}\nOnly disputed deals accept evidence.`);
+  }
+
+  const isSeller = deal.seller_telegram_id === userId;
+  const isBuyer = deal.buyer_username.toLowerCase() === username?.toLowerCase();
+  const isAdmin = ADMIN_USERNAMES.includes(username?.toLowerCase());
+  if (!isSeller && !isBuyer && !isAdmin) return ctx.reply('Not your deal.');
+
+  const role = isSeller ? 'Seller' : (isBuyer ? 'Buyer' : 'Admin');
+  const description = match[2]?.trim() || 'Photo evidence';
+  const photo = ctx.message.photo[ctx.message.photo.length - 1]; // Highest resolution
+
+  const { error: insertError } = await supabase.from('evidence').insert({
+    deal_id: deal.deal_id,
+    submitted_by: username,
+    role,
+    content: description,
+    file_id: photo.file_id,
+    file_type: 'photo',
+    telegram_id: userId
+  });
+
+  if (insertError) {
+    console.error('Photo evidence insert error:', insertError);
+    return ctx.reply(`Failed to save photo evidence: ${insertError.message}`);
+  }
+
+  await ctx.reply(`✅ Photo evidence submitted for ${deal.deal_id}\n\nView all: /viewevidence ${deal.deal_id}`);
+
+  // Forward photo to other parties
+  const { data: buyerUser } = await supabase.from('users').select('telegram_id').ilike('username', deal.buyer_username).single();
+  const parties = [deal.seller_telegram_id, buyerUser?.telegram_id].filter(id => id && id !== userId);
+
+  for (const partyId of parties) {
+    try {
+      await bot.api.sendPhoto(partyId, photo.file_id, { caption: `📸 Evidence for ${deal.deal_id}\n\nFrom: @${username} (${role})\n"${description}"` });
+    } catch (e) {}
+  }
+
+  // Notify admins with photo
+  for (const admin of ADMIN_USERNAMES) {
+    const { data: adminUser } = await supabase.from('users').select('telegram_id').ilike('username', admin).single();
+    if (adminUser?.telegram_id && adminUser.telegram_id !== userId) {
+      try {
+        await bot.api.sendPhoto(adminUser.telegram_id, photo.file_id, { caption: `📸 Evidence: ${deal.deal_id}\nFrom: @${username} (${role})\n"${description}"` });
+      } catch (e) {}
+    }
+  }
+});
+
 // /viewevidence
 bot.command('viewevidence', async (ctx) => {
   const match = ctx.message.text.match(/^\/viewevidence\s+(TL-\w+)$/i);
@@ -482,17 +547,35 @@ bot.command('viewevidence', async (ctx) => {
 
   const { data: evidence } = await supabase.from('evidence').select('*').eq('deal_id', deal.deal_id).order('created_at', { ascending: true });
 
+  if (!evidence?.length) {
+    return ctx.reply(`📋 Evidence: ${deal.deal_id}\nStatus: ${deal.status}\nReason: ${deal.dispute_reason || 'N/A'}\n\nNo evidence yet.\n\n📝 Text: /evidence ${deal.deal_id} [msg]\n📸 Photo: Send photo with caption "${deal.deal_id} description"`);
+  }
+
+  // Send text summary first
   let msg = `📋 Evidence: ${deal.deal_id}\nStatus: ${deal.status}\nReason: ${deal.dispute_reason || 'N/A'}\n\n`;
 
-  if (!evidence?.length) {
-    msg += 'No evidence yet.\nSubmit: /evidence ' + deal.deal_id + ' [msg]';
-  } else {
-    for (const e of evidence) {
-      msg += `[${e.role}] @${e.submitted_by}\n"${e.content}"\n\n`;
+  let photoCount = 0;
+  for (const e of evidence) {
+    if (e.file_type === 'photo') {
+      photoCount++;
+      msg += `📸 [${e.role}] @${e.submitted_by}: "${e.content}"\n\n`;
+    } else {
+      msg += `📝 [${e.role}] @${e.submitted_by}\n"${e.content}"\n\n`;
     }
   }
 
   await ctx.reply(msg);
+
+  // Send photos separately
+  for (const e of evidence) {
+    if (e.file_id && e.file_type === 'photo') {
+      try {
+        await bot.api.sendPhoto(ctx.chat.id, e.file_id, { caption: `[${e.role}] @${e.submitted_by}: ${e.content}` });
+      } catch (err) {
+        console.error('Failed to send evidence photo:', err.message);
+      }
+    }
+  }
 });
 
 // /canceldispute
