@@ -1,4 +1,4 @@
-// TrustLock Bot v3.1 - Admin Panel (Fixed)
+// TrustLock Bot v3.2 - All Fixes
 require('dotenv').config();
 
 const { Bot } = require('grammy');
@@ -371,7 +371,10 @@ bot.command('dispute', async (ctx) => {
     disputed_at: new Date().toISOString()
   }).ilike('deal_id', deal.deal_id);
 
-  if (error) return ctx.reply(`Failed: ${error.message}`);
+  if (error) {
+    console.error('Dispute update error:', error);
+    return ctx.reply(`Failed to open dispute: ${error.message}\n\nNote: Make sure you've run the latest SQL in Supabase!`);
+  }
 
   await ctx.reply(`⚠️ DISPUTE OPENED\n\nDeal: ${deal.deal_id}\nReason: ${reason}\n\nAdmin Team will review.\n\nSubmit evidence: /evidence ${deal.deal_id} [msg]`);
 
@@ -514,7 +517,10 @@ bot.command('review', async (ctx) => {
 
   const { deal } = await getDeal(match[1]);
   if (!deal) return ctx.reply('Deal not found.');
-  if (deal.status !== 'completed') return ctx.reply('Can only review completed deals.');
+  // Allow reviews for completed OR refunded deals (both are finished states)
+  if (deal.status !== 'completed' && deal.status !== 'refunded') {
+    return ctx.reply(`Can only review finished deals. Current status: ${deal.status}`);
+  }
 
   const isSeller = deal.seller_telegram_id === userId;
   const isBuyer = deal.buyer_username.toLowerCase() === username?.toLowerCase();
@@ -825,14 +831,19 @@ bot.command('resolve', async (ctx) => {
   }
 
   const newStatus = decision === 'release' ? 'completed' : 'refunded';
-  await supabase.from('deals').update({
+  const { error: updateError } = await supabase.from('deals').update({
     status: newStatus,
     resolved_by: ctx.from.username,
     completed_at: new Date().toISOString()
   }).ilike('deal_id', deal.deal_id);
 
+  if (updateError) {
+    console.error('Resolve update error:', updateError);
+    return ctx.reply(`Failed to update database: ${updateError.message}`);
+  }
+
   await logAdminAction('resolve', deal.deal_id, ctx.from.id, ctx.from.username, null, decision);
-  await ctx.reply(`⚖️ ${deal.deal_id}: ${decision === 'release' ? 'Released to seller' : 'Refunded to buyer'}`);
+  await ctx.reply(`⚖️ ${deal.deal_id}: ${decision === 'release' ? 'Released to seller' : 'Refunded to buyer'}\n\nStatus updated to: ${newStatus}`);
 
   const sellerMsg = decision === 'release' ? '✅ Funds released to you!' : '❌ Refunded to buyer.';
   const buyerMsg = decision === 'refund' ? '✅ Funds refunded to you!' : '❌ Released to seller.';
@@ -912,7 +923,7 @@ bot.catch((err) => {
 
 // Start
 bot.start();
-console.log('TrustLock v3.1 running!');
+console.log('TrustLock v3.2 running!');
 console.log('Contract:', CONTRACT_ADDRESS);
 console.log('Botmasters:', BOTMASTER_USERNAMES.join(', '));
 setInterval(pollDeals, 30000);

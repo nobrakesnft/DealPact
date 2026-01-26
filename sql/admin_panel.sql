@@ -29,8 +29,14 @@ ALTER TABLE public.deals ADD COLUMN IF NOT EXISTS assigned_to_username TEXT;
 ALTER TABLE public.deals ADD COLUMN IF NOT EXISTS assigned_at TIMESTAMP WITH TIME ZONE;
 ALTER TABLE public.deals ADD COLUMN IF NOT EXISTS assigned_by TEXT;
 
--- 4. Add disputed_by_telegram_id for reliable identification
+-- 4. Add ALL dispute-related columns to deals table
+ALTER TABLE public.deals ADD COLUMN IF NOT EXISTS disputed_by TEXT;
 ALTER TABLE public.deals ADD COLUMN IF NOT EXISTS disputed_by_telegram_id BIGINT;
+ALTER TABLE public.deals ADD COLUMN IF NOT EXISTS dispute_reason TEXT;
+ALTER TABLE public.deals ADD COLUMN IF NOT EXISTS disputed_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE public.deals ADD COLUMN IF NOT EXISTS resolved_by TEXT;
+ALTER TABLE public.deals ADD COLUMN IF NOT EXISTS funded_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE public.deals ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP WITH TIME ZONE;
 
 -- 5. Evidence table (if not exists)
 CREATE TABLE IF NOT EXISTS public.evidence (
