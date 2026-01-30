@@ -1,4 +1,4 @@
-# TrustLock
+# DealPact
 
 > Telegram-native escrow for crypto freelancers and digital goods sellers.
 
