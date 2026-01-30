@@ -1,4 +1,4 @@
-// TrustLock Bot v3.2 - All Fixes
+// DealPact Bot v3.2 - All Fixes
 require('dotenv').config();
 
 const { Bot } = require('grammy');
@@ -127,7 +127,7 @@ bot.command('start', async (ctx) => {
     return ctx.reply(`⚠️ Open Dispute for ${dealId}\n\nCommand: /dispute ${dealId} [reason]`);
   }
 
-  await ctx.reply(`🔒 TrustLock - Secure Crypto Escrow\n\nTrustLock acts as a neutral escrow intermediary.\nFunds are held on-chain and released only by buyer action or admin resolution.\n\n1. Seller: /new @buyer 50 desc\n2. Buyer: /fund TL-XXXX\n3. Deliver goods\n4. Buyer: /release TL-XXXX\n\nCommands: /help\n\n⚠️ Admins will NEVER DM you first.\nOnly interact with admins inside this bot.`);
+  await ctx.reply(`🔒 DealPact - Secure Crypto Escrow\n\nDealPact acts as a neutral escrow intermediary.\nFunds are held on-chain and released only by buyer action or admin resolution.\n\n1. Seller: /new @buyer 50 desc\n2. Buyer: /fund TL-XXXX\n3. Deliver goods\n4. Buyer: /release TL-XXXX\n\nCommands: /help\n\n⚠️ Admins will NEVER DM you first.\nOnly interact with admins inside this bot.`);
 });
 
 bot.command('help', async (ctx) => {
@@ -136,7 +136,7 @@ bot.command('help', async (ctx) => {
   if (role === 'botmaster') adminNote = '\n\n👑 Botmaster: /adminhelp';
   else if (role === 'moderator') adminNote = '\n\n🛡️ Moderator: /modhelp';
 
-  await ctx.reply(`📖 TrustLock Commands
+  await ctx.reply(`📖 DealPact Commands
 
 SETUP: /wallet 0x...
 
@@ -156,7 +156,7 @@ DISPUTES
 
 RATINGS
 /review TL-XXXX 5 Great!
-/rep @user\n\n🔐 Safety: TrustLock admins will never DM you first.${adminNote}`);
+/rep @user\n\n🔐 Safety: DealPact admins will never DM you first.${adminNote}`);
 });
 
 bot.command('wallet', async (ctx) => {
@@ -280,7 +280,7 @@ bot.command('fund', async (ctx) => {
     const existingId = await escrowContract.externalIdToDealId(deal.deal_id);
     if (existingId.toString() !== '0') {
       await supabase.from('deals').update({ contract_deal_id: deal.deal_id }).ilike('deal_id', deal.deal_id);
-      return ctx.reply(`👇 TAP TO DEPOSIT:\nhttps://nobrakesnft.github.io/TrustLock?deal=${deal.deal_id}`);
+      return ctx.reply(`👇 TAP TO DEPOSIT:\nhttps://nobrakesnft.github.io/DealPact?deal=${deal.deal_id}`);
     }
   } catch (e) {}
 
@@ -291,7 +291,7 @@ bot.command('fund', async (ctx) => {
     await ctx.reply(`Tx: https://sepolia.basescan.org/tx/${tx.hash}`);
     await tx.wait();
     await supabase.from('deals').update({ contract_deal_id: deal.deal_id, tx_hash: tx.hash }).ilike('deal_id', deal.deal_id);
-    await ctx.reply(`✅ Ready!\n\n👇 TAP TO DEPOSIT:\nhttps://nobrakesnft.github.io/TrustLock?deal=${deal.deal_id}`);
+    await ctx.reply(`✅ Ready!\n\n👇 TAP TO DEPOSIT:\nhttps://nobrakesnft.github.io/DealPact?deal=${deal.deal_id}`);
   } catch (e) {
     await ctx.reply(`Failed: ${e.shortMessage || e.message}`);
   }
@@ -314,7 +314,7 @@ bot.command('release', async (ctx) => {
     return ctx.reply(`Cannot release. Status: ${deal.status}`);
   }
 
-  await ctx.reply(`📤 Release: ${deal.deal_id}\nAmount: ${deal.amount} USDC\n\n👇 TAP TO RELEASE:\nhttps://nobrakesnft.github.io/TrustLock?deal=${deal.deal_id}&action=release`);
+  await ctx.reply(`📤 Release: ${deal.deal_id}\nAmount: ${deal.amount} USDC\n\n👇 TAP TO RELEASE:\nhttps://nobrakesnft.github.io/DealPact?deal=${deal.deal_id}&action=release`);
 });
 
 bot.command('cancel', async (ctx) => {
@@ -648,7 +648,7 @@ bot.command('addmod', async (ctx) => {
   await ctx.reply(`✅ @${modUsername} is now a moderator.`);
 
   try {
-    await bot.api.sendMessage(user.telegram_id, `🛡️ You are now a TrustLock Moderator!\n\n/modhelp for commands.`);
+    await bot.api.sendMessage(user.telegram_id, `🛡️ You are now a DealPact Moderator!\n\n/modhelp for commands.`);
   } catch (e) {}
 });
 
@@ -982,7 +982,7 @@ bot.catch((err) => {
 
 // Start
 bot.start();
-console.log('TrustLock v3.2 running!');
+console.log('DealPact v3.2 running!');
 console.log('Contract:', CONTRACT_ADDRESS);
 console.log('Botmasters:', BOTMASTER_USERNAMES.join(', '));
 setInterval(pollDeals, 30000);
