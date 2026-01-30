@@ -273,20 +273,8 @@
                             MetaMask
                         </button>
                         <button class="wallet-btn" onclick="connectWallet('rabby')">
-                            <img src="https://rabby.io/assets/images/logo-white.svg" alt="Rabby">
+                            <img src="https://raw.githubusercontent.com/nicenathapong/wallet-icon/main/icons/rabby.png" alt="Rabby">
                             Rabby Wallet
-                        </button>
-                        <button class="wallet-btn" onclick="connectWallet('trust')">
-                            <img src="https://trustwallet.com/assets/images/favicon.png" alt="Trust Wallet">
-                            Trust Wallet
-                        </button>
-                        <button class="wallet-btn" onclick="connectWallet('coinbase')">
-                            <img src="https://www.coinbase.com/img/favicon/favicon-256.png" alt="Coinbase">
-                            Coinbase Wallet
-                        </button>
-                        <button class="wallet-btn" onclick="connectWallet('walletconnect')">
-                            <img src="https://walletconnect.com/static/favicon.png" alt="WalletConnect">
-                            WalletConnect
                         </button>
                     </div>
                     <div id="connect-alert" style="margin-top:12px;"></div>
@@ -548,12 +536,6 @@
             // On mobile or no ethereum, deep-link to wallet app
             if (!window.ethereum) {
                 openWallet(walletType);
-                return;
-            }
-
-            // On desktop, check if the selected wallet provider is available
-            if (walletType === 'walletconnect') {
-                $('connect-alert').innerHTML = '<div class="alert alert-warning">WalletConnect requires a dApp with WalletConnect SDK. Use MetaMask or Rabby on desktop.</div>';
                 return;
             }
 
