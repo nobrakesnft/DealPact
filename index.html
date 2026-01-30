@@ -268,21 +268,30 @@
                 <!-- Connect Wallet -->
                 <div id="buy-connect" class="card">
                     <div class="card-title">Connect Wallet</div>
-                    <button class="btn btn-primary" id="connect-btn" onclick="connectWallet()">Connect Wallet</button>
-                    <div id="mobile-wallets" class="wallet-options hidden">
-                        <button class="wallet-btn" onclick="openWallet('metamask')">
+                    <button class="btn btn-primary" id="connect-btn" onclick="showWalletOptions()">Connect Wallet</button>
+                    <div id="wallet-list" class="wallet-options hidden">
+                        <button class="wallet-btn" onclick="connectWallet('metamask')">
                             <div class="wallet-icon" style="background:linear-gradient(135deg,#E2761B,#CD6116);">M</div>
                             MetaMask
                         </button>
-                        <button class="wallet-btn" onclick="openWallet('rabby')">
+                        <button class="wallet-btn" onclick="connectWallet('rabby')">
                             <div class="wallet-icon" style="background:linear-gradient(135deg,#8697FF,#6366F1);">R</div>
                             Rabby Wallet
                         </button>
-                        <button class="wallet-btn" onclick="openWallet('trust')">
+                        <button class="wallet-btn" onclick="connectWallet('trust')">
                             <div class="wallet-icon" style="background:linear-gradient(135deg,#3375BB,#0500FF);">T</div>
                             Trust Wallet
                         </button>
+                        <button class="wallet-btn" onclick="connectWallet('coinbase')">
+                            <div class="wallet-icon" style="background:linear-gradient(135deg,#0052FF,#0033CC);">C</div>
+                            Coinbase Wallet
+                        </button>
+                        <button class="wallet-btn" onclick="connectWallet('walletconnect')">
+                            <div class="wallet-icon" style="background:linear-gradient(135deg,#3B99FC,#2176FF);">W</div>
+                            WalletConnect
+                        </button>
                     </div>
+                    <div id="connect-alert" style="margin-top:12px;"></div>
                 </div>
 
                 <!-- Actions -->
@@ -469,6 +478,12 @@
                 case 'trust':
                     window.location.href = `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(url)}`;
                     break;
+                case 'coinbase':
+                    window.location.href = `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(url)}`;
+                    break;
+                case 'walletconnect':
+                    window.location.href = `https://walletconnect.com/`;
+                    break;
             }
         }
 
@@ -526,14 +541,21 @@
             }
         }
 
-        async function connectWallet() {
+        function showWalletOptions() {
+            hide('connect-btn');
+            show('wallet-list');
+        }
+
+        async function connectWallet(walletType) {
+            // On mobile or no ethereum, deep-link to wallet app
             if (!window.ethereum) {
-                if (isMobile()) {
-                    hide('connect-btn');
-                    show('mobile-wallets');
-                    return;
-                }
-                showAlert('No wallet detected. Install MetaMask.', 'warning');
+                openWallet(walletType);
+                return;
+            }
+
+            // On desktop, check if the selected wallet provider is available
+            if (walletType === 'walletconnect') {
+                $('connect-alert').innerHTML = '<div class="alert alert-warning">WalletConnect requires a dApp with WalletConnect SDK. Use MetaMask or Rabby on desktop.</div>';
                 return;
             }
 
@@ -680,9 +702,10 @@
             show('buy-intro');
             hide('buy-actions');
             show('buy-connect');
-            hide('mobile-wallets');
             show('connect-btn');
+            hide('wallet-list');
             $('action-alert').innerHTML = '';
+            $('connect-alert').innerHTML = '';
             $('deal-search').value = '';
             state = { deal: null, signer: null, address: null };
         }
