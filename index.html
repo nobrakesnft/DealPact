@@ -279,6 +279,7 @@
                     <button class="btn btn-success hidden" id="release-btn" onclick="releaseFunds()">Release to Seller</button>
                     <button class="btn btn-danger hidden" id="dispute-btn" onclick="openDispute()">Open Dispute</button>
                     <div id="action-alert"></div>
+                    <button class="btn btn-secondary" onclick="disconnectWallet()" style="margin-top:12px;">Disconnect Wallet</button>
                 </div>
 
                 <button class="btn btn-secondary" onclick="resetView()">← Back</button>
@@ -685,6 +686,17 @@
                 showAlert(e.code === 4001 ? 'Cancelled' : 'Failed: ' + e.message, 'error');
             }
             $('release-btn').disabled = false;
+        }
+
+        function disconnectWallet() {
+            state.signer = null;
+            state.address = null;
+            hide('buy-actions');
+            show('buy-connect');
+            $('connect-btn').disabled = false;
+            $('connect-btn').textContent = 'Connect Wallet';
+            $('connect-alert').innerHTML = '';
+            $('action-alert').innerHTML = '';
         }
 
         function openDispute() {
