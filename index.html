@@ -135,17 +135,15 @@
         /* Wallet Options */
         .wallet-options { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
         .wallet-btn {
-            display: flex; align-items: center; justify-content: center; gap: 12px;
-            padding: 14px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: flex-start; gap: 14px;
+            padding: 14px 18px; border-radius: 12px; width: 100%;
             border: 1px solid rgba(255,255,255,0.1);
             background: rgba(255,255,255,0.03); color: #fff;
-            font-size: 0.95rem; cursor: pointer; transition: all 0.2s;
+            font-size: 0.95rem; font-weight: 500; cursor: pointer; transition: all 0.2s;
         }
         .wallet-btn:hover { background: rgba(255,255,255,0.08); border-color: #00d9ff; }
-        .wallet-icon {
-            width: 32px; height: 32px; border-radius: 8px;
-            display: flex; align-items: center; justify-content: center;
-            font-weight: bold; font-size: 18px; color: white;
+        .wallet-btn img {
+            width: 28px; height: 28px; border-radius: 6px;
         }
 
         /* Alerts */
@@ -271,23 +269,23 @@
                     <button class="btn btn-primary" id="connect-btn" onclick="showWalletOptions()">Connect Wallet</button>
                     <div id="wallet-list" class="wallet-options hidden">
                         <button class="wallet-btn" onclick="connectWallet('metamask')">
-                            <div class="wallet-icon" style="background:linear-gradient(135deg,#E2761B,#CD6116);">M</div>
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" alt="MetaMask">
                             MetaMask
                         </button>
                         <button class="wallet-btn" onclick="connectWallet('rabby')">
-                            <div class="wallet-icon" style="background:linear-gradient(135deg,#8697FF,#6366F1);">R</div>
+                            <img src="https://rabby.io/assets/images/logo-white.svg" alt="Rabby">
                             Rabby Wallet
                         </button>
                         <button class="wallet-btn" onclick="connectWallet('trust')">
-                            <div class="wallet-icon" style="background:linear-gradient(135deg,#3375BB,#0500FF);">T</div>
+                            <img src="https://trustwallet.com/assets/images/favicon.png" alt="Trust Wallet">
                             Trust Wallet
                         </button>
                         <button class="wallet-btn" onclick="connectWallet('coinbase')">
-                            <div class="wallet-icon" style="background:linear-gradient(135deg,#0052FF,#0033CC);">C</div>
+                            <img src="https://www.coinbase.com/img/favicon/favicon-256.png" alt="Coinbase">
                             Coinbase Wallet
                         </button>
                         <button class="wallet-btn" onclick="connectWallet('walletconnect')">
-                            <div class="wallet-icon" style="background:linear-gradient(135deg,#3B99FC,#2176FF);">W</div>
+                            <img src="https://walletconnect.com/static/favicon.png" alt="WalletConnect">
                             WalletConnect
                         </button>
                     </div>
