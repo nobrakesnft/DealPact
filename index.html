@@ -219,8 +219,51 @@
             <button onclick="searchDeal()">Find Deal</button>
         </div>
 
+        <!-- Deal Flow - Above Tabs -->
+        <div id="buy-deal" class="hidden">
+            <div class="deal-box">
+                <div class="deal-id" id="deal-id">TL-XXXX</div>
+                <div class="deal-amount"><span id="deal-amount">0</span> <span>USDC</span></div>
+                <div class="deal-status status-pending" id="deal-status">Pending</div>
+                <div class="deal-info">
+                    <div>Seller: <span id="deal-seller">0x...</span></div>
+                    <div>Buyer: <span id="deal-buyer">0x...</span></div>
+                </div>
+            </div>
+
+            <!-- Connect Wallet -->
+            <div id="buy-connect" class="card">
+                <div class="card-title">Connect Wallet</div>
+                <button class="btn btn-primary" id="connect-btn" onclick="connectWallet()">Connect Wallet</button>
+                <div id="connect-alert"></div>
+            </div>
+
+            <!-- Actions -->
+            <div id="buy-actions" class="card hidden">
+                <div class="card-title">Actions</div>
+                <div id="wallet-info" style="text-align:center;margin-bottom:15px;color:#00ff88;"></div>
+                <button class="btn btn-primary hidden" id="approve-btn" onclick="approveUSDC()">Approve USDC</button>
+                <button class="btn btn-primary hidden" id="deposit-btn" onclick="depositUSDC()">Deposit Funds</button>
+                <button class="btn btn-success hidden" id="release-btn" onclick="releaseFunds()">Release to Seller</button>
+
+                <div id="action-alert"></div>
+                <button class="btn btn-secondary" onclick="disconnectWallet()" style="margin-top:12px;">Disconnect Wallet</button>
+            </div>
+
+            <button class="btn btn-secondary" onclick="resetView()">← Back</button>
+        </div>
+
+        <!-- Success -->
+        <div id="buy-success" class="success-box hidden">
+            <div class="success-icon" id="success-icon">✓</div>
+            <h2 id="success-title">Success!</h2>
+            <p style="color:#888;margin:10px 0;" id="success-msg">Transaction complete.</p>
+            <a class="tx-link" id="tx-link" href="#" target="_blank">View on BaseScan →</a>
+            <button class="btn btn-secondary" onclick="resetView()" style="margin-top:20px;">Done</button>
+        </div>
+
         <!-- Tabs -->
-        <div class="tabs">
+        <div id="tabs-section" class="tabs">
             <button class="tab active" data-tab="buy">BUY</button>
             <button class="tab" data-tab="sell">SELL</button>
             <button class="tab" data-tab="status">STATUS</button>
@@ -228,7 +271,6 @@
 
         <!-- BUY TAB -->
         <div id="tab-buy" class="tab-content active">
-            <!-- Before Deal Found -->
             <div id="buy-intro" class="card">
                 <div class="card-title">How to Buy</div>
                 <div class="steps">
@@ -238,7 +280,7 @@
                     </div>
                     <div class="step">
                         <div class="step-num">2</div>
-                        <div class="step-text"><strong>Enter ID above</strong> and click GO</div>
+                        <div class="step-text"><strong>Enter ID above</strong> and click Find Deal</div>
                     </div>
                     <div class="step">
                         <div class="step-num">3</div>
@@ -249,49 +291,6 @@
                         <div class="step-text"><strong>Receive goods</strong> then release payment</div>
                     </div>
                 </div>
-            </div>
-
-            <!-- Deal Found -->
-            <div id="buy-deal" class="hidden">
-                <div class="deal-box">
-                    <div class="deal-id" id="deal-id">TL-XXXX</div>
-                    <div class="deal-amount"><span id="deal-amount">0</span> <span>USDC</span></div>
-                    <div class="deal-status status-pending" id="deal-status">Pending</div>
-                    <div class="deal-info">
-                        <div>Seller: <span id="deal-seller">0x...</span></div>
-                        <div>Buyer: <span id="deal-buyer">0x...</span></div>
-                    </div>
-                </div>
-
-                <!-- Connect Wallet -->
-                <div id="buy-connect" class="card">
-                    <div class="card-title">Connect Wallet</div>
-                    <button class="btn btn-primary" id="connect-btn" onclick="connectWallet()">Connect Wallet</button>
-                    <div id="connect-alert"></div>
-                </div>
-
-                <!-- Actions -->
-                <div id="buy-actions" class="card hidden">
-                    <div class="card-title">Actions</div>
-                    <div id="wallet-info" style="text-align:center;margin-bottom:15px;color:#00ff88;"></div>
-                    <button class="btn btn-primary hidden" id="approve-btn" onclick="approveUSDC()">Approve USDC</button>
-                    <button class="btn btn-primary hidden" id="deposit-btn" onclick="depositUSDC()">Deposit Funds</button>
-                    <button class="btn btn-success hidden" id="release-btn" onclick="releaseFunds()">Release to Seller</button>
-
-                    <div id="action-alert"></div>
-                    <button class="btn btn-secondary" onclick="disconnectWallet()" style="margin-top:12px;">Disconnect Wallet</button>
-                </div>
-
-                <button class="btn btn-secondary" onclick="resetView()">← Back</button>
-            </div>
-
-            <!-- Success -->
-            <div id="buy-success" class="success-box hidden">
-                <div class="success-icon" id="success-icon">✓</div>
-                <h2 id="success-title">Success!</h2>
-                <p style="color:#888;margin:10px 0;" id="success-msg">Transaction complete.</p>
-                <a class="tx-link" id="tx-link" href="#" target="_blank">View on BaseScan →</a>
-                <button class="btn btn-secondary" onclick="resetView()" style="margin-top:20px;">Done</button>
             </div>
         </div>
 
@@ -502,13 +501,9 @@
                 $('deal-status').textContent = statuses[status];
                 $('deal-status').className = 'deal-status ' + statusClasses[status];
 
-                // Switch to BUY tab and show deal
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelector('[data-tab="buy"]').classList.add('active');
+                // Hide tabs and show deal flow
+                hide('tabs-section');
                 document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                $('tab-buy').classList.add('active');
-
-                hide('buy-intro');
                 hide('buy-success');
                 show('buy-deal');
 
@@ -707,12 +702,17 @@
         function resetView() {
             hide('buy-deal');
             hide('buy-success');
-            show('buy-intro');
             hide('buy-actions');
             show('buy-connect');
             show('connect-btn');
+            $('connect-btn').disabled = false;
+            $('connect-btn').textContent = 'Connect Wallet';
             $('action-alert').innerHTML = '';
             $('connect-alert').innerHTML = '';
+            // Restore tabs
+            show('tabs-section');
+            document.querySelector('[data-tab="buy"]').classList.add('active');
+            $('tab-buy').classList.add('active');
             $('deal-search').value = '';
             state = { deal: null, signer: null, address: null };
         }
