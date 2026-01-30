@@ -127,7 +127,7 @@ bot.command('start', async (ctx) => {
     return ctx.reply(`⚠️ Open Dispute for ${dealId}\n\nCommand: /dispute ${dealId} [reason]`);
   }
 
-  await ctx.reply(`🔒 TrustLock - Secure Crypto Escrow\n\n1. Seller: /new @buyer 50 desc\n2. Buyer: /fund TL-XXXX\n3. Deliver goods\n4. Buyer: /release TL-XXXX\n\nCommands: /help`);
+  await ctx.reply(`🔒 TrustLock - Secure Crypto Escrow\n\nTrustLock acts as a neutral escrow intermediary.\nFunds are held on-chain and released only by buyer action or admin resolution.\n\n1. Seller: /new @buyer 50 desc\n2. Buyer: /fund TL-XXXX\n3. Deliver goods\n4. Buyer: /release TL-XXXX\n\nCommands: /help\n\n⚠️ Admins will NEVER DM you first.\nOnly interact with admins inside this bot.`);
 });
 
 bot.command('help', async (ctx) => {
@@ -156,7 +156,7 @@ DISPUTES
 
 RATINGS
 /review TL-XXXX 5 Great!
-/rep @user${adminNote}`);
+/rep @user\n\n🔐 Safety: TrustLock admins will never DM you first.${adminNote}`);
 });
 
 bot.command('wallet', async (ctx) => {
@@ -207,7 +207,7 @@ bot.command('new', async (ctx) => {
 
   if (error) return ctx.reply(`Failed: ${error.message}`);
 
-  await ctx.reply(`✅ Deal Created: ${dealId}\n\nSeller: @${senderUsername}\nBuyer: @${buyerUsername}\nAmount: ${amount} USDC\n\n@${buyerUsername} → /fund ${dealId}`);
+  await ctx.reply(`✅ Deal Created: ${dealId}\n\nSeller: @${senderUsername}\nBuyer: @${buyerUsername}\nAmount: ${amount} USDC\n\n@${buyerUsername} → /fund ${dealId}\n\n⚠️ Escrow Rules\n• Seller must deliver as agreed\n• Buyer must release or dispute after delivery\n• Either party may dispute at any time\n• Unreleased deals may be reviewed by admins`);
 });
 
 bot.command('status', async (ctx) => {
@@ -223,6 +223,15 @@ bot.command('status', async (ctx) => {
   if (deal.status === 'disputed') {
     extra = `\n\n⚠️ DISPUTED\nReason: ${deal.dispute_reason || 'N/A'}`;
     extra += deal.assigned_to_username ? '\nStatus: Being reviewed' : '\nStatus: Awaiting review';
+  } else if (deal.status === 'funded' && deal.funded_at) {
+    const msLeft = new Date(deal.funded_at).getTime() + 24 * 60 * 60 * 1000 - Date.now();
+    if (msLeft > 0) {
+      const h = Math.floor(msLeft / 3600000);
+      const m = Math.floor((msLeft % 3600000) / 60000);
+      extra = `\n\n⏱️ Release window: ${h}h ${m}m remaining`;
+    } else {
+      extra = `\n\n⏱️ Release window expired — please /release ${deal.deal_id} or /dispute ${deal.deal_id}`;
+    }
   }
 
   await ctx.reply(`${emoji} ${deal.deal_id} - ${deal.status.toUpperCase()}\n\nSeller: @${deal.seller_username}\nBuyer: @${deal.buyer_username}\nAmount: ${deal.amount} USDC\nDesc: ${deal.description}${extra}`);
@@ -237,7 +246,7 @@ bot.command('deals', async (ctx) => {
     .select('*')
     .or(`seller_telegram_id.eq.${userId},buyer_username.ilike.${username}`)
     .order('created_at', { ascending: false })
-    .limit(10);
+    .limit(15);
 
   if (error) return ctx.reply(`Error: ${error.message}`);
   if (!data?.length) return ctx.reply('No deals. Create: /new');
@@ -921,7 +930,7 @@ async function pollDeals() {
           if (deal.seller_telegram_id) try { await bot.api.sendMessage(deal.seller_telegram_id, `💰 ${deal.deal_id} FUNDED!\n\n${deal.amount} USDC locked.`); } catch (e) {}
 
           const { data: buyer } = await supabase.from('users').select('telegram_id').ilike('username', deal.buyer_username).single();
-          if (buyer?.telegram_id) try { await bot.api.sendMessage(buyer.telegram_id, `✅ ${deal.deal_id} deposited!\n\n/release ${deal.deal_id} when ready.`); } catch (e) {}
+          if (buyer?.telegram_id) try { await bot.api.sendMessage(buyer.telegram_id, `✅ ${deal.deal_id} deposited!\n\nPlease /release ${deal.deal_id} or /dispute ${deal.deal_id} within 24 hours.`); } catch (e) {}
         }
       } catch (e) {}
     }
@@ -948,6 +957,18 @@ async function pollDeals() {
           if (buyer?.telegram_id) try { await bot.api.sendMessage(buyer.telegram_id, `✅ ${deal.deal_id}\n\nDeal completed! Funds released to seller.`); } catch (e) {}
         }
       } catch (e) {}
+    }
+
+    for (const deal of funded || []) {
+      if (deal.release_reminder_sent || !deal.funded_at) continue;
+      const elapsed = Date.now() - new Date(deal.funded_at).getTime();
+      if (elapsed >= 24 * 60 * 60 * 1000) {
+        await supabase.from('deals').update({ release_reminder_sent: true }).ilike('deal_id', deal.deal_id);
+
+        const { data: buyer } = await supabase.from('users').select('telegram_id').ilike('username', deal.buyer_username).single();
+        if (buyer?.telegram_id) try { await bot.api.sendMessage(buyer.telegram_id, `⏱️ ${deal.deal_id} — 24hr release window has expired.\n\nPlease /release ${deal.deal_id} or /dispute ${deal.deal_id}.`); } catch (e) {}
+        if (deal.seller_telegram_id) try { await bot.api.sendMessage(deal.seller_telegram_id, `⏱️ ${deal.deal_id} — 24hr release window has expired. Buyer has been reminded.\n\nYou may /dispute ${deal.deal_id} if needed.`); } catch (e) {}
+      }
     }
   } catch (e) {
     console.error('Poll:', e.message);
