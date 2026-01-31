@@ -1,7 +1,7 @@
 # DealPact Security Audit Log
 
 > Single source of truth for security checks. Read this FIRST before scanning code.
-> Last updated: 2026-01-31 (session 2)
+> Last updated: 2026-01-31 (session 3)
 
 ---
 
@@ -34,6 +34,9 @@
 | 7 | tx.wait() timeouts | PASS | js:132-137,328,402,882 | 2026-01-31 | waitWithTimeout() helper, 60s timeout via Promise.race |
 | 8 | Console.log leaking admin IDs | PASS | — | 2026-01-31 | Removed console.log of BOTMASTER_IDS |
 | 9 | Username interpolation in .or() | PARTIAL | js:276,584 | — | Low risk (Telegram validates usernames) but not parameterized |
+| 10 | Cancel restricted to pending only | PASS | js:369 | 2026-01-31 | Funded deals cannot be cancelled; seller only |
+| 11 | Release gatekeeper (website) | PASS | docs/index.html | 2026-01-31 | release() locked behind bot-issued ?action=release URL |
+| 12 | /viewevidence moderator scope | PASS | js:525-530 | 2026-01-31 | Mods can only view evidence for assigned disputes |
 
 ---
 
@@ -70,3 +73,13 @@
 | 2026-01-31 | Added existence check in release() | Claude |
 | 2026-01-31 | Added 60s timeout on all tx.wait() calls | Claude |
 | 2026-01-31 | Removed console.log of BOTMASTER_IDS | Claude |
+| 2026-01-31 | Patched /cancel: only pending_deposit, seller only | Claude |
+| 2026-01-31 | Added /viewevidence auth: moderator can only view assigned disputes | Claude |
+| 2026-01-31 | Website: release gatekeeper (locked behind bot ?action=release) | Claude |
+| 2026-01-31 | Website: deal status cards for all statuses (funded, completed, refunded, disputed, cancelled) | Claude |
+| 2026-01-31 | Website: removed QR code scanner | Claude |
+| 2026-01-31 | Website: added wallet selector modal with multi-wallet detection | Claude |
+| 2026-01-31 | Website: stats bar changed to Fee / Response Time / Uptime | Claude |
+| 2026-01-31 | Removed old TrustLock bot code from gh-pages branch | Claude |
+| 2026-01-31 | Synced web/index.html on main with gh-pages docs/index.html | Claude |
+| 2026-01-31 | Integration testing passed: happy path, dispute flow, edge cases | Owner |
