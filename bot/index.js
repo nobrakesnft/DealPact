@@ -220,7 +220,7 @@ bot.command('wallet', async (ctx) => {
     wallet_address: walletAddress
   }, { onConflict: 'telegram_id' });
 
-  await ctx.reply(error ? `Failed: ${error.message}` : `✅ Wallet registered: ${match[1]}`);
+  await ctx.reply(error ? 'Something went wrong. Please try again shortly.' : `✅ Wallet registered: ${match[1]}`);
 });
 
 bot.command('new', async (ctx) => {
@@ -250,7 +250,7 @@ bot.command('new', async (ctx) => {
     status: 'pending_deposit'
   });
 
-  if (error) return ctx.reply(`Failed: ${error.message}`);
+  if (error) return ctx.reply('Something went wrong. Please try again shortly.');
 
   await ctx.reply(`✅ Deal Created: ${dealId}\n\nSeller: @${senderUsername}\nBuyer: @${buyerUsername}\nAmount: ${amount} USDC\n\n@${buyerUsername} → /fund ${dealId}\n\n⚠️ Escrow Rules\n• Seller must deliver as agreed\n• Buyer must release or dispute after delivery\n• Either party may dispute at any time\n• Unreleased deals may be reviewed by admins`);
 });
@@ -293,7 +293,7 @@ bot.command('deals', async (ctx) => {
     .order('created_at', { ascending: false })
     .limit(15);
 
-  if (error) return ctx.reply(`Error: ${error.message}`);
+  if (error) return ctx.reply('Something went wrong. Please try again shortly.');
   if (!data?.length) return ctx.reply('No deals. Create: /new');
 
   let msg = 'Your Deals:\n\n';
@@ -338,7 +338,7 @@ bot.command('fund', async (ctx) => {
     await supabase.from('deals').update({ contract_deal_id: deal.deal_id, tx_hash: tx.hash }).ilike('deal_id', deal.deal_id);
     await ctx.reply(`✅ Ready!\n\n👇 TAP TO DEPOSIT:\n${FRONTEND_URL}?deal=${deal.deal_id}`);
   } catch (e) {
-    await ctx.reply(`Failed: ${e.shortMessage || e.message}`);
+    await ctx.reply('Something went wrong. Please try again shortly.');
   }
 });
 
@@ -429,7 +429,7 @@ bot.command('dispute', async (ctx) => {
 
   if (error) {
     console.error('Dispute update error:', error);
-    return ctx.reply(`Failed to open dispute: ${error.message}\n\nNote: Make sure you've run the latest SQL in Supabase!`);
+    return ctx.reply('Something went wrong. Please try again shortly.');
   }
 
   await ctx.reply(`⚠️ DISPUTE OPENED\n\nDeal: ${deal.deal_id}\nReason: ${reason}\n\nAdmin Team will review.\n\nSubmit evidence: /evidence ${deal.deal_id} [msg]`);
@@ -480,7 +480,7 @@ bot.command('evidence', async (ctx) => {
     telegram_id: userId
   });
 
-  if (error) return ctx.reply(`Failed: ${error.message}`);
+  if (error) return ctx.reply('Something went wrong. Please try again shortly.');
   await ctx.reply(`✅ Evidence submitted for ${deal.deal_id}`);
 });
 
@@ -514,7 +514,7 @@ bot.on('message:photo', async (ctx) => {
     telegram_id: userId
   });
 
-  if (error) return ctx.reply(`Failed: ${error.message}`);
+  if (error) return ctx.reply('Something went wrong. Please try again shortly.');
   await ctx.reply(`✅ Photo evidence submitted for ${deal.deal_id}`);
 });
 
@@ -535,7 +535,7 @@ bot.command('viewevidence', async (ctx) => {
 
   const { data: evidence, error } = await supabase.from('evidence').select('*').ilike('deal_id', deal.deal_id).order('created_at', { ascending: true });
 
-  if (error) return ctx.reply(`Error: ${error.message}`);
+  if (error) return ctx.reply('Something went wrong. Please try again shortly.');
   if (!evidence?.length) return ctx.reply(`No evidence for ${deal.deal_id}`);
 
   let msg = `📋 Evidence: ${deal.deal_id}\nReason: ${deal.dispute_reason || 'N/A'}\n\n`;
@@ -690,9 +690,9 @@ bot.command('addmod', async (ctx) => {
     const { error: updateError } = await supabase.from('moderators')
       .update({ is_active: true, username: modUsername, added_by: ctx.from.username })
       .eq('telegram_id', user.telegram_id);
-    if (updateError) return ctx.reply(`Failed: ${updateError.message}`);
+    if (updateError) return ctx.reply('Something went wrong. Please try again shortly.');
   } else if (error) {
-    return ctx.reply(`Failed: ${error.message}`);
+    return ctx.reply('Something went wrong. Please try again shortly.');
   }
 
   await logAdminAction('add_mod', null, ctx.from.id, ctx.from.username, modUsername, 'Added moderator');
@@ -710,7 +710,7 @@ bot.command('removemod', async (ctx) => {
   if (!match) return ctx.reply('Usage: /removemod @username');
 
   const { error } = await supabase.from('moderators').update({ is_active: false }).ilike('username', match[1]);
-  if (error) return ctx.reply(`Failed: ${error.message}`);
+  if (error) return ctx.reply('Something went wrong. Please try again shortly.');
 
   await logAdminAction('remove_mod', null, ctx.from.id, ctx.from.username, match[1], 'Removed moderator');
   await ctx.reply(`✅ @${match[1]} removed from moderators.`);
@@ -720,7 +720,7 @@ bot.command('mods', async (ctx) => {
   if (!isBotmaster(ctx.from.id)) return ctx.reply('Botmaster only.');
 
   const { data, error } = await supabase.from('moderators').select('*').eq('is_active', true);
-  if (error) return ctx.reply(`Error: ${error.message}`);
+  if (error) return ctx.reply('Something went wrong. Please try again shortly.');
   if (!data?.length) return ctx.reply('No moderators. /addmod @username');
 
   let msg = '🛡️ Moderators:\n\n';
@@ -739,7 +739,7 @@ bot.command('disputes', async (ctx) => {
   }
 
   const { data, error } = await query;
-  if (error) return ctx.reply(`Error: ${error.message}`);
+  if (error) return ctx.reply('Something went wrong. Please try again shortly.');
   if (!data?.length) return ctx.reply('No open disputes.');
 
   let msg = `⚠️ Open Disputes (${data.length}):\n\n`;
@@ -758,7 +758,7 @@ bot.command('mydisputes', async (ctx) => {
   if (!isAdmin) return ctx.reply('Admin only.');
 
   const { data, error } = await supabase.from('deals').select('*').eq('status', 'disputed').eq('assigned_to_telegram_id', ctx.from.id);
-  if (error) return ctx.reply(`Error: ${error.message}`);
+  if (error) return ctx.reply('Something went wrong. Please try again shortly.');
   if (!data?.length) return ctx.reply('No disputes assigned to you.');
 
   let msg = `🛡️ Your Disputes (${data.length}):\n\n`;
@@ -789,7 +789,7 @@ bot.command('assign', async (ctx) => {
     assigned_by: ctx.from.username
   }).ilike('deal_id', deal.deal_id);
 
-  if (error) return ctx.reply(`Failed: ${error.message}`);
+  if (error) return ctx.reply('Something went wrong. Please try again shortly.');
 
   await logAdminAction('assign', deal.deal_id, ctx.from.id, ctx.from.username, modUsername, 'Assigned');
   await ctx.reply(`✅ ${deal.deal_id} assigned to @${modUsername}`);
@@ -847,7 +847,7 @@ bot.command('msg', async (ctx) => {
     await logAdminAction('msg', deal.deal_id, ctx.from.id, ctx.from.username, target, match[3]);
     await ctx.reply(`✅ Sent to ${target}.`);
   } catch (e) {
-    await ctx.reply(`Failed: ${e.message}`);
+    await ctx.reply('Something went wrong. Please try again shortly.');
   }
 });
 
@@ -900,7 +900,7 @@ bot.command('resolve', async (ctx) => {
       await waitWithTimeout(tx);
       await ctx.reply('✅ On-chain resolved.');
     } catch (e) {
-      await ctx.reply(`On-chain error: ${e.shortMessage || e.message}\n\nUpdating database anyway...`);
+      await ctx.reply('On-chain transaction failed. Updating database anyway...');
     }
   }
 
@@ -940,7 +940,7 @@ bot.command('logs', async (ctx) => {
   if (dealId) query = query.ilike('deal_id', dealId);
 
   const { data, error } = await query;
-  if (error) return ctx.reply(`Error: ${error.message}`);
+  if (error) return ctx.reply('Something went wrong. Please try again shortly.');
   if (!data?.length) return ctx.reply('No logs found.');
 
   let msg = `📋 Logs${dealId ? ` for ${dealId.toUpperCase()}` : ''}:\n\n`;
@@ -1031,8 +1031,11 @@ async function pollDeals() {
 }
 
 // Error handler
-bot.catch((err) => {
+bot.catch(async (err) => {
   console.error('Bot error:', err.message);
+  try {
+    await err.ctx?.reply('Something went wrong. Please try again shortly.');
+  } catch (e) {}
 });
 
 // Start
