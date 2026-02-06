@@ -55,6 +55,31 @@ setInterval(() => {
   }
 }, 300000);
 
+// Pending reviews: track users awaiting comment input
+// Format: { dealId, isSeller, rating, timestamp }
+const pendingReviews = new Map();
+const REVIEW_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+
+// Pending wallets: track users awaiting wallet input
+// Format: { timestamp }
+const pendingWallets = new Map();
+const WALLET_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+
+// Cleanup expired pending reviews and wallets every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [userId, data] of pendingReviews) {
+    if (now - data.timestamp > REVIEW_TIMEOUT) {
+      pendingReviews.delete(userId);
+    }
+  }
+  for (const [userId, data] of pendingWallets) {
+    if (now - data.timestamp > WALLET_TIMEOUT) {
+      pendingWallets.delete(userId);
+    }
+  }
+}, 300000);
+
 // ============ HELPER FUNCTIONS ============
 
 function generateDealId() {
@@ -164,6 +189,12 @@ bot.command('start', async (ctx) => {
     return ctx.reply(`⚠️ Open Dispute for ${dealId}\n\nType: \`/dispute ${dealId} your reason\``, { parse_mode: 'Markdown' });
   }
 
+  const userId = ctx.from.id;
+
+  // Check if user has wallet registered
+  const { data: user } = await supabase.from('users').select('wallet_address').eq('telegram_id', userId).single();
+  const hasWallet = !!user?.wallet_address;
+
   const kb = new InlineKeyboard()
     .text('Sell', 'guide_sell')
     .text('Buy', 'guide_buy')
@@ -175,6 +206,8 @@ bot.command('start', async (ctx) => {
     .text('My Deals', 'guide_deals')
     .row()
     .text('Check Rep', 'guide_rep')
+    .text(hasWallet ? '🔄 Update Wallet' : '👛 Register Wallet', hasWallet ? 'update_wallet' : 'register_wallet')
+    .row()
     .text('Help', 'guide_help');
 
   await ctx.reply(
@@ -331,6 +364,12 @@ bot.callbackQuery('my_rep', async (ctx) => {
 
 bot.callbackQuery('main_menu', async (ctx) => {
   await ctx.answerCallbackQuery();
+  const userId = ctx.from.id;
+
+  // Check if user has wallet registered
+  const { data: user } = await supabase.from('users').select('wallet_address').eq('telegram_id', userId).single();
+  const hasWallet = !!user?.wallet_address;
+
   const kb = new InlineKeyboard()
     .text('Sell', 'guide_sell')
     .text('Buy', 'guide_buy')
@@ -342,12 +381,56 @@ bot.callbackQuery('main_menu', async (ctx) => {
     .text('My Deals', 'guide_deals')
     .row()
     .text('Check Rep', 'guide_rep')
+    .text(hasWallet ? '🔄 Update Wallet' : '👛 Register Wallet', hasWallet ? 'update_wallet' : 'register_wallet')
+    .row()
     .text('Help', 'guide_help');
 
   await ctx.reply(
     `*DealPact* 🔒\n\nWhat would you like to do?`,
     { reply_markup: kb, parse_mode: 'Markdown' }
   );
+});
+
+bot.callbackQuery('register_wallet', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const userId = ctx.from.id;
+
+  // Set pending wallet state
+  pendingWallets.set(userId, { timestamp: Date.now() });
+
+  const kb = new InlineKeyboard().text('Cancel', 'cancel_wallet').row().text('Main Menu', 'main_menu');
+  await ctx.reply(
+    `*Register Your Wallet* 👛\n\nSend your wallet address below.\n\nExample: \`0x1234...abcd\`\n\n_No wallet? Download MetaMask or Rabby._`,
+    { reply_markup: kb, parse_mode: 'Markdown' }
+  );
+});
+
+bot.callbackQuery('update_wallet', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const userId = ctx.from.id;
+
+  // Get current wallet
+  const { data: user } = await supabase.from('users').select('wallet_address').eq('telegram_id', userId).single();
+
+  // Set pending wallet state
+  pendingWallets.set(userId, { timestamp: Date.now() });
+
+  const kb = new InlineKeyboard().text('Cancel', 'cancel_wallet').row().text('Main Menu', 'main_menu');
+  await ctx.reply(
+    `*Update Your Wallet* 🔄\n\nCurrent: \`${user?.wallet_address || 'None'}\`\n\nSend your new wallet address below:`,
+    { reply_markup: kb, parse_mode: 'Markdown' }
+  );
+});
+
+bot.callbackQuery('cancel_wallet', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const userId = ctx.from.id;
+
+  // Clear pending state
+  pendingWallets.delete(userId);
+
+  const kb = new InlineKeyboard().text('Main Menu', 'main_menu');
+  await ctx.reply('Wallet registration cancelled.', { reply_markup: kb });
 });
 
 bot.callbackQuery('guide_deals', async (ctx) => {
@@ -588,6 +671,14 @@ bot.callbackQuery(/^rate_(.+)_(\d)$/, async (ctx) => {
   // Store rating temporarily, wait for comment
   await supabase.from('deals').update({ [field]: rating }).ilike('deal_id', deal.deal_id);
 
+  // Track that this user is awaiting a comment
+  pendingReviews.set(userId, {
+    dealId: deal.deal_id,
+    isSeller,
+    rating,
+    timestamp: Date.now()
+  });
+
   const kb = new InlineKeyboard()
     .text('Skip Comment', `skip_review_${dealId}`)
     .row()
@@ -598,6 +689,14 @@ bot.callbackQuery(/^rate_(.+)_(\d)$/, async (ctx) => {
 
 bot.callbackQuery(/^skip_review_(.+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
+  const userId = ctx.from.id;
+
+  // Clear pending review state
+  const pending = pendingReviews.get(userId);
+  if (pending) {
+    pendingReviews.delete(userId);
+  }
+
   const kb = new InlineKeyboard().text('Main Menu', 'main_menu');
   await ctx.reply(`✅ Review submitted!`, { reply_markup: kb });
 });
@@ -1487,10 +1586,79 @@ bot.command('logs', async (ctx) => {
 
 // Catch-all (rate limited to prevent spam/DoS)
 bot.on('message:text', async (ctx) => {
-  if (!ctx.message.text.startsWith('/')) {
-    if (!isRateLimited(ctx.from.id, 5000)) {
-      await ctx.reply('Unknown command. Try /help');
+  const userId = ctx.from.id;
+  const username = ctx.from.username || 'Anonymous';
+  const text = ctx.message.text;
+
+  // Skip if it's a command
+  if (text.startsWith('/')) return;
+
+  // Check if user has a pending wallet registration
+  const pendingWallet = pendingWallets.get(userId);
+  if (pendingWallet) {
+    // Check if not expired
+    if (Date.now() - pendingWallet.timestamp > WALLET_TIMEOUT) {
+      pendingWallets.delete(userId);
+    } else {
+      // Validate wallet address format
+      const walletMatch = text.match(/^(0x[a-fA-F0-9]{40})$/i);
+      if (!walletMatch) {
+        return ctx.reply('❌ Invalid wallet address.\n\nPlease send a valid address starting with 0x (42 characters total).\n\nExample: `0x1234567890abcdef1234567890abcdef12345678`', { parse_mode: 'Markdown' });
+      }
+
+      const walletAddress = walletMatch[1].toLowerCase();
+
+      // Check if wallet is already registered to another user
+      const { data: existing } = await supabase.from('users').select('telegram_id').eq('wallet_address', walletAddress).single();
+      if (existing && existing.telegram_id !== userId) {
+        return ctx.reply('❌ This wallet is already registered to another user.');
+      }
+
+      // Register/update wallet
+      const { error } = await supabase.from('users').upsert({
+        telegram_id: userId,
+        username: username,
+        wallet_address: walletAddress
+      }, { onConflict: 'telegram_id' });
+
+      pendingWallets.delete(userId);
+
+      if (error) {
+        return ctx.reply('Something went wrong. Please try again shortly.');
+      }
+
+      const kb = new InlineKeyboard().text('Main Menu', 'main_menu');
+      return ctx.reply(`✅ Wallet registered!\n\n\`${walletMatch[1]}\``, { reply_markup: kb, parse_mode: 'Markdown' });
     }
+  }
+
+  // Check if user has a pending review comment
+  const pendingReview = pendingReviews.get(userId);
+  if (pendingReview) {
+    // Check if not expired
+    if (Date.now() - pendingReview.timestamp > REVIEW_TIMEOUT) {
+      pendingReviews.delete(userId);
+    } else {
+      // Save the comment
+      const field = pendingReview.isSeller ? 'seller_review' : 'buyer_review';
+      const { error } = await supabase.from('deals').update({
+        [field]: text
+      }).ilike('deal_id', pendingReview.dealId);
+
+      pendingReviews.delete(userId);
+
+      if (error) {
+        return ctx.reply('Something went wrong saving your comment. Try /review command instead.');
+      }
+
+      const kb = new InlineKeyboard().text('Main Menu', 'main_menu');
+      return ctx.reply(`✅ Review submitted: ${'⭐'.repeat(pendingReview.rating)} — "${text}"`, { reply_markup: kb });
+    }
+  }
+
+  // No pending action, show unknown command
+  if (!isRateLimited(userId, 5000)) {
+    await ctx.reply('Unknown command. Try /help');
   }
 });
 
