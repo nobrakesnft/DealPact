@@ -377,7 +377,7 @@
         <!-- Footer -->
         <div class="footer">
             <a href="https://t.me/DealPactbot" target="_blank">Telegram Bot</a> •
-            <a href="https://sepolia.basescan.org/address/0x116511753bf00671bc321f2e3364159Fe502ed22" target="_blank">Contract</a>
+            <a href="https://basescan.org/address/0x116511753bf00671bc321f2e3364159Fe502ed22" target="_blank">Contract</a>
             <br><br>
             DealPact acts as a neutral escrow intermediary. Admins will never contact users privately.
             <br><br>
@@ -388,10 +388,10 @@
     <script>
         const CONFIG = {
             CONTRACT: '0x116511753bf00671bc321f2e3364159Fe502ed22',
-            USDC: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
-            RPC: 'https://sepolia.base.org',
-            CHAIN_ID: 84532,
-            EXPLORER: 'https://sepolia.basescan.org'
+            USDC: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+            RPC: 'https://mainnet.base.org',
+            CHAIN_ID: 8453,
+            EXPLORER: 'https://basescan.org'
         };
 
         const ESCROW_ABI = [
@@ -542,24 +542,24 @@
                 connectMsg('Checking network...', 'info');
                 const network = await provider.getNetwork();
                 if (network.chainId !== CONFIG.CHAIN_ID) {
-                    connectMsg('Switching to Base Sepolia...', 'info');
+                    connectMsg('Switching to Base...', 'info');
                     try {
                         await window.ethereum.request({
                             method: 'wallet_switchEthereumChain',
-                            params: [{ chainId: '0x14A34' }]
+                            params: [{ chainId: '0x2105' }]
                         });
                     } catch (e) {
                         if (e.code === 4902) {
                             await window.ethereum.request({
                                 method: 'wallet_addEthereumChain',
                                 params: [{
-                                    chainId: '0x14A34', chainName: 'Base Sepolia',
+                                    chainId: '0x2105', chainName: 'Base',
                                     nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
                                     rpcUrls: [CONFIG.RPC], blockExplorerUrls: [CONFIG.EXPLORER]
                                 }]
                             });
                         } else {
-                            connectMsg('Please switch to Base Sepolia network in your wallet.', 'warning');
+                            connectMsg('Please switch to Base network in your wallet.', 'warning');
                             $('connect-btn').disabled = false;
                             $('connect-btn').textContent = 'Connect Wallet';
                             return;

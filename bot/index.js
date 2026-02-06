@@ -1,7 +1,7 @@
 // DealPact Bot v3.2 - All Fixes
 require('dotenv').config();
 
-const { Bot } = require('grammy');
+const { Bot, InlineKeyboard } = require('grammy');
 const { createClient } = require('@supabase/supabase-js');
 const { ethers } = require('ethers');
 
@@ -15,7 +15,7 @@ if (missingEnv.length) {
 
 // Initialize
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
-const provider = new ethers.JsonRpcProvider('https://sepolia.base.org');
+const provider = new ethers.JsonRpcProvider('https://mainnet.base.org');
 const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
 
@@ -155,45 +155,451 @@ bot.command('start', async (ctx) => {
   const param = ctx.message.text.split(' ')[1]?.toLowerCase();
 
   if (param === 'newdeal') {
-    return ctx.reply(`💰 CREATE A NEW DEAL\n\nStep 1: /wallet 0xYourAddress\nStep 2: /new @buyer 50 Description\n\nNeed help? /help`);
+    const kb = new InlineKeyboard().text('Help', 'guide_help');
+    return ctx.reply(`*Create a New Deal*\n\n1. Register wallet: \`/wallet 0xYourAddress\`\n2. Create deal: \`/new @buyer amount description\``, { reply_markup: kb, parse_mode: 'Markdown' });
   }
 
   if (param?.startsWith('dispute_')) {
     const dealId = param.replace('dispute_', '').toUpperCase();
-    return ctx.reply(`⚠️ Open Dispute for ${dealId}\n\nCommand: /dispute ${dealId} [reason]`);
+    return ctx.reply(`⚠️ Open Dispute for ${dealId}\n\nType: \`/dispute ${dealId} your reason\``, { parse_mode: 'Markdown' });
   }
 
-  await ctx.reply(`🔒 DealPact - Secure Crypto Escrow\n\nDealPact acts as a neutral escrow intermediary.\nFunds are held on-chain and released only by buyer action or admin resolution.\n\n1. Seller: /new @buyer 50 desc\n2. Buyer: /fund DP-XXXX\n3. Deliver goods\n4. Buyer: /release DP-XXXX\n\nCommands: /help\n\n⚠️ Admins will NEVER DM you first.\nOnly interact with admins inside this bot.`);
+  const kb = new InlineKeyboard()
+    .text('Sell', 'guide_sell')
+    .text('Buy', 'guide_buy')
+    .row()
+    .text('Fund Deal', 'guide_fund')
+    .text('Release', 'guide_release')
+    .row()
+    .text('Check Status', 'guide_status')
+    .text('My Deals', 'guide_deals')
+    .row()
+    .text('Check Rep', 'guide_rep')
+    .text('Help', 'guide_help');
+
+  await ctx.reply(
+    `*Welcome to DealPact* 🔒\n\nCrypto escrow service for Telegram.\n\nFunds are held in a smart contract until the deal is complete. Dispute resolution available.\n\nWhat would you like to do?`,
+    { reply_markup: kb, parse_mode: 'Markdown' }
+  );
 });
 
 bot.command('help', async (ctx) => {
   const { role } = await isAnyAdmin(ctx);
   let adminNote = '';
-  if (role === 'botmaster') adminNote = '\n\n👑 Botmaster: /adminhelp';
-  else if (role === 'moderator') adminNote = '\n\n🛡️ Moderator: /modhelp';
+  if (role === 'botmaster') adminNote = '\n\n*Admin:* /adminhelp';
+  else if (role === 'moderator') adminNote = '\n\n*Mod:* /modhelp';
 
-  await ctx.reply(`📖 DealPact Commands
+  const kb = new InlineKeyboard()
+    .text('Sell', 'guide_sell')
+    .text('Buy', 'guide_buy')
+    .row()
+    .text('Check Deal', 'guide_status')
+    .text('My Deals', 'guide_deals');
 
-SETUP: /wallet 0x...
+  await ctx.reply(`*DealPact Help*
 
-DEALS
-/new @buyer 100 desc
-/fund DP-XXXX
-/status DP-XXXX
-/deals
-/release DP-XXXX
-/cancel DP-XXXX
+*First time?* Register wallet:
+\`/wallet 0xYourWalletAddress\`
 
-DISPUTES
-/dispute DP-XXXX reason
-/evidence DP-XXXX msg
-📸 Photo: send image with caption DP-XXXX desc
-/viewevidence DP-XXXX
-/canceldispute DP-XXXX
+*Selling:*
+1. Create deal → \`/new @buyer amount description\`
+2. Wait for buyer to deposit
+3. Deliver your service/item
+4. Buyer releases funds to you ✅
 
-RATINGS
-/review DP-XXXX 5 Great!
-/rep @user\n\n🔐 Safety: DealPact admins will never DM you first.${adminNote}`);
+*Buying:*
+1. Seller creates the deal for you
+2. Fund it → \`/fund DP-XXXX\`
+3. Receive the service/item
+4. Release funds → \`/release DP-XXXX\`
+
+*Problem?*
+\`/dispute DP-XXXX reason\`
+
+*After deal is done:*
+\`/review DP-XXXX 5 Great seller!\`
+\`/rep @username\`
+
+⚠️ Admins will NEVER DM you first.${adminNote}`, { reply_markup: kb, parse_mode: 'Markdown' });
+});
+
+// ============ BUTTON HANDLERS ============
+
+bot.callbackQuery('guide_sell', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const userId = ctx.from.id;
+  const { data: user } = await supabase.from('users').select('wallet_address').eq('telegram_id', userId).single();
+
+  if (!user?.wallet_address) {
+    const kb = new InlineKeyboard().text('Main Menu', 'main_menu');
+    return ctx.reply(
+      `*Step 1: Register Your Wallet*\n\nType:\n\`/wallet 0xYourWalletAddress\`\n\nNo wallet? Download MetaMask or Rabby.`, { reply_markup: kb, parse_mode: 'Markdown' }
+    );
+  }
+
+  const kb = new InlineKeyboard().text('My Deals', 'guide_deals').text('Main Menu', 'main_menu');
+  await ctx.reply(
+    `✅ *Wallet registered!*\n\nTo create a deal:\n\`/new @buyer amount description\`\n\nExample:\n\`/new @john 25 Logo design\`\n\nBuyer deposits → You deliver → They release funds.`, { reply_markup: kb, parse_mode: 'Markdown' }
+  );
+});
+
+bot.callbackQuery('guide_buy', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const userId = ctx.from.id;
+  const { data: user } = await supabase.from('users').select('wallet_address').eq('telegram_id', userId).single();
+
+  if (!user?.wallet_address) {
+    const kb = new InlineKeyboard().text('Main Menu', 'main_menu');
+    return ctx.reply(
+      `*Step 1: Register Your Wallet*\n\nType:\n\`/wallet 0xYourWalletAddress\`\n\nNo wallet? Download MetaMask or Rabby.`, { reply_markup: kb, parse_mode: 'Markdown' }
+    );
+  }
+
+  const kb = new InlineKeyboard().text('My Deals', 'guide_deals').text('Main Menu', 'main_menu');
+  await ctx.reply(
+    `✅ *Wallet registered!*\n\n1. Ask seller to create deal for you\n2. Fund it: \`/fund DP-XXXX\`\n3. Receive service/item\n4. Release: \`/release DP-XXXX\`\n\nProblem? \`/dispute DP-XXXX reason\``, { reply_markup: kb, parse_mode: 'Markdown' }
+  );
+});
+
+bot.callbackQuery('guide_status', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const kb = new InlineKeyboard().text('My Deals', 'guide_deals').text('Main Menu', 'main_menu');
+  await ctx.reply(
+    `*Check a Deal*\n\nType: \`/status DP-XXXX\`\n\nReplace DP-XXXX with your deal ID (e.g. DP-A7X9).`, { reply_markup: kb, parse_mode: 'Markdown' }
+  );
+});
+
+bot.callbackQuery('guide_fund', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const kb = new InlineKeyboard().text('My Deals', 'guide_deals').text('Main Menu', 'main_menu');
+  await ctx.reply(
+    `*Fund a Deal*\n\nType: \`/fund DP-XXXX\`\n\nReplace DP-XXXX with your deal ID from the seller.`, { reply_markup: kb, parse_mode: 'Markdown' }
+  );
+});
+
+bot.callbackQuery('guide_release', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const kb = new InlineKeyboard().text('My Deals', 'guide_deals').text('Main Menu', 'main_menu');
+  await ctx.reply(
+    `*Release Funds*\n\nType: \`/release DP-XXXX\`\n\nOnly release after you receive the service/item.`, { reply_markup: kb, parse_mode: 'Markdown' }
+  );
+});
+
+bot.callbackQuery('guide_rep', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const kb = new InlineKeyboard().text('My Rep', 'my_rep').text('Main Menu', 'main_menu');
+  await ctx.reply(
+    `*Check Reputation*\n\nSend a username (e.g. @john)`, { reply_markup: kb, parse_mode: 'Markdown' }
+  );
+});
+
+bot.callbackQuery('my_rep', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const username = ctx.from.username;
+  if (!username) return ctx.reply('You need a Telegram username to have a reputation.');
+
+  const { data: deals } = await supabase
+    .from('deals')
+    .select('*')
+    .or(`seller_username.ilike.${username},buyer_username.ilike.${username}`)
+    .eq('status', 'completed');
+
+  const total = deals?.length || 0;
+  const volume = deals?.reduce((s, d) => s + parseFloat(d.amount), 0) || 0;
+
+  let badge = 'New';
+  if (total >= 50) badge = '💎 Elite';
+  else if (total >= 25) badge = '🏆 Pro';
+  else if (total >= 10) badge = '⭐ Proven';
+  else if (total >= 4) badge = 'Established';
+  else if (total >= 2) badge = 'Active';
+
+  let reviews = '';
+  for (const d of (deals || []).slice(0, 5)) {
+    const isSeller = d.seller_username.toLowerCase() === username.toLowerCase();
+    const rating = isSeller ? d.buyer_rating : d.seller_rating;
+    const comment = isSeller ? d.buyer_review : d.seller_review;
+    const reviewer = isSeller ? d.buyer_username : d.seller_username;
+    if (rating) reviews += `${'⭐'.repeat(rating)} by @${reviewer}${comment ? ` - "${comment}"` : ''}\n`;
+  }
+
+  const kb = new InlineKeyboard().text('Main Menu', 'main_menu');
+  let msg = `*@${username}*\n\n${badge}\nDeals: ${total}\nVolume: ${volume.toFixed(0)} USDC`;
+  if (reviews) msg += `\n\n*Reviews:*\n${reviews.trim()}`;
+  await ctx.reply(msg, { reply_markup: kb, parse_mode: 'Markdown' });
+});
+
+bot.callbackQuery('main_menu', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const kb = new InlineKeyboard()
+    .text('Sell', 'guide_sell')
+    .text('Buy', 'guide_buy')
+    .row()
+    .text('Fund Deal', 'guide_fund')
+    .text('Release', 'guide_release')
+    .row()
+    .text('Check Status', 'guide_status')
+    .text('My Deals', 'guide_deals')
+    .row()
+    .text('Check Rep', 'guide_rep')
+    .text('Help', 'guide_help');
+
+  await ctx.reply(
+    `*DealPact* 🔒\n\nWhat would you like to do?`,
+    { reply_markup: kb, parse_mode: 'Markdown' }
+  );
+});
+
+bot.callbackQuery('guide_deals', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const userId = ctx.from.id;
+  const username = ctx.from.username;
+
+  const { data } = await supabase
+    .from('deals')
+    .select('*')
+    .or(`seller_telegram_id.eq.${userId},buyer_username.ilike.${username}`)
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  if (!data?.length) {
+    const kb = new InlineKeyboard().text('Sell', 'guide_sell').text('Buy', 'guide_buy').row().text('Main Menu', 'main_menu');
+    return ctx.reply('No deals yet.\n\nTap below to get started.', { reply_markup: kb });
+  }
+
+  let msg = '*Your Deals:*\n\n';
+  const kb = new InlineKeyboard();
+  let btnCount = 0;
+
+  for (const d of data) {
+    const emoji = { pending_deposit: '⏳', funded: '💰', completed: '✅', disputed: '⚠️', cancelled: '❌', refunded: '↩️' }[d.status] || '❓';
+    const role = d.seller_telegram_id === userId ? 'Seller' : 'Buyer';
+    msg += `${emoji} \`${d.deal_id}\` | ${d.amount} USDC | ${role}\n`;
+
+    if (btnCount < 5 && (d.status === 'pending_deposit' || d.status === 'funded' || d.status === 'disputed')) {
+      kb.text(`${emoji} ${d.deal_id}`, `status_${d.deal_id}`).row();
+      btnCount++;
+    }
+  }
+
+  kb.text('Main Menu', 'main_menu');
+  await ctx.reply(msg, { reply_markup: kb, parse_mode: 'Markdown' });
+});
+
+bot.callbackQuery('guide_help', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const kb = new InlineKeyboard()
+    .text('Sell', 'guide_sell')
+    .text('Buy', 'guide_buy')
+    .row()
+    .text('My Deals', 'guide_deals')
+    .text('Main Menu', 'main_menu');
+
+  await ctx.reply(`*DealPact Help*
+
+*First time?* Register wallet:
+\`/wallet 0xYourWalletAddress\`
+
+*Selling:*
+1. Create deal → \`/new @buyer amount description\`
+2. Wait for buyer to deposit
+3. Deliver your service/item
+4. Buyer releases funds ✅
+
+*Buying:*
+1. Seller creates the deal for you
+2. Fund it → \`/fund DP-XXXX\`
+3. Receive the service/item
+4. Release funds → \`/release DP-XXXX\`
+
+*Cancel:* \`/cancel DP-XXXX\` (before funded)
+
+*Problem?* \`/dispute DP-XXXX reason\`
+
+*Done?* \`/review DP-XXXX 5 Great seller!\`
+
+⚠️ Admins will NEVER DM you first.`, { reply_markup: kb, parse_mode: 'Markdown' });
+});
+
+// Dynamic callback handlers for deal actions
+bot.callbackQuery(/^fund_(.+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const dealId = ctx.match[1];
+  const username = ctx.from.username;
+
+  const { deal } = await getDeal(dealId);
+  if (!deal) return ctx.reply('❌ Deal not found.');
+  if (deal.buyer_username.toLowerCase() !== username?.toLowerCase()) return ctx.reply('🚫 Only the buyer can fund this deal.');
+  if (deal.status !== 'pending_deposit') return ctx.reply(`⚠️ Cannot fund. Status: ${deal.status}`);
+
+  const { data: sellerUser } = await supabase.from('users').select('wallet_address').eq('telegram_id', deal.seller_telegram_id).single();
+  const { data: buyerUser } = await supabase.from('users').select('wallet_address').ilike('username', username).single();
+
+  if (!sellerUser?.wallet_address) return ctx.reply('⚠️ Seller needs to register wallet first.');
+  if (!buyerUser?.wallet_address) return ctx.reply('⚠️ Register your wallet first: /wallet 0xYourAddress');
+
+  try {
+    const existingId = await escrowContract.externalIdToDealId(deal.deal_id);
+    if (existingId.toString() !== '0') {
+      await supabase.from('deals').update({ contract_deal_id: deal.deal_id }).ilike('deal_id', deal.deal_id);
+      const fundKb = new InlineKeyboard().url('💳 Deposit Now', `${FRONTEND_URL}?deal=${deal.deal_id}`);
+      return ctx.reply(`💰 *Ready to deposit!*\n\nAmount: *${deal.amount} USDC*\n\n👇 Tap below to pay securely:`, { reply_markup: fundKb, parse_mode: 'Markdown' });
+    }
+  } catch (e) {}
+
+  await ctx.reply('⏳ Creating on-chain deal...');
+
+  try {
+    const tx = await escrowContract.createDeal(deal.deal_id, sellerUser.wallet_address, buyerUser.wallet_address, BigInt(Math.floor(deal.amount * 1e6)));
+    await ctx.reply(`🔗 Tx: https://basescan.org/tx/${tx.hash}`);
+    await waitWithTimeout(tx);
+    await supabase.from('deals').update({ contract_deal_id: deal.deal_id, tx_hash: tx.hash }).ilike('deal_id', deal.deal_id);
+    const fundKb2 = new InlineKeyboard().url('💳 Deposit Now', `${FRONTEND_URL}?deal=${deal.deal_id}`);
+    await ctx.reply(`✅ *Ready to deposit!*\n\nAmount: *${deal.amount} USDC*\n\n👇 Tap below to pay securely:`, { reply_markup: fundKb2, parse_mode: 'Markdown' });
+  } catch (e) {
+    await ctx.reply('❌ Something went wrong. Please try again shortly.');
+  }
+});
+
+bot.callbackQuery(/^status_(.+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const dealId = ctx.match[1];
+
+  const { deal } = await getDeal(dealId);
+  if (!deal) return ctx.reply('❌ Deal not found.');
+
+  const emoji = { pending_deposit: '⏳', funded: '💰', completed: '✅', disputed: '⚠️', cancelled: '❌', refunded: '↩️' }[deal.status] || '❓';
+  const statusText = { pending_deposit: 'Awaiting Deposit', funded: 'Funded & Active', completed: 'Completed', disputed: 'Disputed', cancelled: 'Cancelled', refunded: 'Refunded' }[deal.status] || deal.status;
+
+  let kb = new InlineKeyboard();
+  const userId = ctx.from.id;
+  const username = ctx.from.username;
+  const isSeller = deal.seller_telegram_id === userId;
+  const isBuyer = deal.buyer_username.toLowerCase() === username?.toLowerCase();
+
+  if (deal.status === 'pending_deposit') {
+    if (isBuyer) kb.text('Fund Deal', `fund_${deal.deal_id}`);
+    if (isSeller) kb.text('Cancel Deal', `cancel_${deal.deal_id}`);
+  } else if (deal.status === 'funded') {
+    if (isBuyer) kb.text('Release Funds', `release_${deal.deal_id}`);
+    kb.row().text('Open Dispute', `dispute_${deal.deal_id}`);
+  } else if (deal.status === 'completed' || deal.status === 'refunded') {
+    kb.text('Leave Review', `review_${deal.deal_id}`);
+  }
+
+  let extra = '';
+  if (deal.status === 'disputed') {
+    extra = `\n\n⚠️ *DISPUTED*\nReason: ${deal.dispute_reason || 'N/A'}`;
+    extra += deal.assigned_to_username ? '\n🔍 Status: Being reviewed' : '\n⏳ Status: Awaiting review';
+  } else if (deal.status === 'funded' && deal.funded_at) {
+    const msLeft = new Date(deal.funded_at).getTime() + 24 * 60 * 60 * 1000 - Date.now();
+    if (msLeft > 0) {
+      const h = Math.floor(msLeft / 3600000);
+      const m = Math.floor((msLeft % 3600000) / 60000);
+      extra = `\n\n⏱️ Release window: *${h}h ${m}m* remaining`;
+    } else {
+      extra = `\n\n⏱️ Release window expired`;
+    }
+  }
+
+  await ctx.reply(`${emoji} *${deal.deal_id}* — ${statusText}\n\n👤 Seller: @${deal.seller_username}\n👤 Buyer: @${deal.buyer_username}\n💵 Amount: *${deal.amount} USDC*\n📝 ${deal.description}${extra}`, { reply_markup: kb, parse_mode: 'Markdown' });
+});
+
+bot.callbackQuery(/^release_(.+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const dealId = ctx.match[1];
+  const username = ctx.from.username;
+
+  const { deal } = await getDeal(dealId);
+  if (!deal) return ctx.reply('❌ Deal not found.');
+  if (deal.buyer_username.toLowerCase() !== username?.toLowerCase()) return ctx.reply('🚫 Only buyer can release.');
+  if (deal.status !== 'funded' && deal.status !== 'disputed') return ctx.reply(`⚠️ Cannot release. Status: ${deal.status}`);
+
+  const releaseKb = new InlineKeyboard().url('✅ Confirm Release', `${FRONTEND_URL}?deal=${deal.deal_id}&action=release`);
+  await ctx.reply(`📤 *Release Funds*\n\nDeal: *${deal.deal_id}*\nAmount: *${deal.amount} USDC*\nTo: @${deal.seller_username}\n\n👇 Tap to confirm in your wallet:`, { reply_markup: releaseKb, parse_mode: 'Markdown' });
+});
+
+bot.callbackQuery(/^dispute_(.+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const dealId = ctx.match[1];
+  await ctx.reply(`⚠️ *Open Dispute for ${dealId}*\n\nTo open a dispute, type:\n\`/dispute ${dealId} your reason here\`\n\nExample:\n\`/dispute ${dealId} Seller not responding\``, { parse_mode: 'Markdown' });
+});
+
+bot.callbackQuery(/^cancel_(.+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const dealId = ctx.match[1];
+  const userId = ctx.from.id;
+
+  const { deal } = await getDeal(dealId);
+  if (!deal) return ctx.reply('Deal not found.');
+  if (deal.seller_telegram_id !== userId) return ctx.reply('Only seller can cancel.');
+  if (deal.status !== 'pending_deposit') return ctx.reply(`Cannot cancel. Status: ${deal.status}`);
+
+  await supabase.from('deals').update({ status: 'cancelled' }).ilike('deal_id', deal.deal_id);
+  const kb = new InlineKeyboard().text('Main Menu', 'main_menu');
+  await ctx.reply(`❌ Deal ${deal.deal_id} cancelled.`, { reply_markup: kb });
+});
+
+bot.callbackQuery(/^review_(.+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const dealId = ctx.match[1];
+  const userId = ctx.from.id;
+  const username = ctx.from.username;
+
+  const { deal } = await getDeal(dealId);
+  if (!deal) return ctx.reply('Deal not found.');
+
+  const isSeller = deal.seller_telegram_id === userId;
+  const isBuyer = deal.buyer_username.toLowerCase() === username?.toLowerCase();
+  if (!isSeller && !isBuyer) return ctx.reply('Not your deal.');
+
+  const targetUser = isSeller ? deal.buyer_username : deal.seller_username;
+  const targetRole = isSeller ? 'buyer' : 'seller';
+
+  const kb = new InlineKeyboard()
+    .text('1 ⭐', `rate_${dealId}_1`)
+    .text('2 ⭐', `rate_${dealId}_2`)
+    .text('3 ⭐', `rate_${dealId}_3`)
+    .text('4 ⭐', `rate_${dealId}_4`)
+    .text('5 ⭐', `rate_${dealId}_5`)
+    .row()
+    .text('Main Menu', 'main_menu');
+
+  await ctx.reply(`*Rate the ${targetRole} @${targetUser}*\n\nDeal: ${dealId}`, { reply_markup: kb, parse_mode: 'Markdown' });
+});
+
+bot.callbackQuery(/^rate_(.+)_(\d)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const dealId = ctx.match[1];
+  const rating = parseInt(ctx.match[2]);
+  const userId = ctx.from.id;
+  const username = ctx.from.username;
+
+  const { deal } = await getDeal(dealId);
+  if (!deal) return ctx.reply('Deal not found.');
+
+  const isSeller = deal.seller_telegram_id === userId;
+  const isBuyer = deal.buyer_username.toLowerCase() === username?.toLowerCase();
+  if (!isSeller && !isBuyer) return ctx.reply('Not your deal.');
+
+  const field = isSeller ? 'seller_rating' : 'buyer_rating';
+  if (deal[field]) return ctx.reply('Already reviewed.');
+
+  // Store rating temporarily, wait for comment
+  await supabase.from('deals').update({ [field]: rating }).ilike('deal_id', deal.deal_id);
+
+  const kb = new InlineKeyboard()
+    .text('Skip Comment', `skip_review_${dealId}`)
+    .row()
+    .text('Main Menu', 'main_menu');
+
+  await ctx.reply(`Rating: ${'⭐'.repeat(rating)}\n\nAdd a comment (just type it) or tap Skip:`, { reply_markup: kb, parse_mode: 'Markdown' });
+});
+
+bot.callbackQuery(/^skip_review_(.+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const kb = new InlineKeyboard().text('Main Menu', 'main_menu');
+  await ctx.reply(`✅ Review submitted!`, { reply_markup: kb });
 });
 
 bot.command('wallet', async (ctx) => {
@@ -228,7 +634,7 @@ bot.command('new', async (ctx) => {
   const senderUsername = ctx.from.username || 'Anonymous';
   const match = ctx.message.text.match(/^\/new\s+@(\w+)\s+(\d+(?:\.\d+)?)\s+(.+)$/i);
 
-  if (!match) return ctx.reply('Format: /new @buyer 50 description');
+  if (!match) return ctx.reply('Format: /new @buyer amount description');
 
   const [, buyerUsername, amountStr, description] = match;
   const amount = parseFloat(amountStr);
@@ -252,34 +658,64 @@ bot.command('new', async (ctx) => {
 
   if (error) return ctx.reply('Something went wrong. Please try again shortly.');
 
-  await ctx.reply(`✅ Deal Created: ${dealId}\n\nSeller: @${senderUsername}\nBuyer: @${buyerUsername}\nAmount: ${amount} USDC\n\n@${buyerUsername} → /fund ${dealId}\n\n⚠️ Escrow Rules\n• Seller must deliver as agreed\n• Buyer must release or dispute after delivery\n• Either party may dispute at any time\n• Unreleased deals may be reviewed by admins`);
+  const sellerKb = new InlineKeyboard().text('Check Status', `status_${dealId}`).text('Main Menu', 'main_menu');
+
+  await ctx.reply(
+    `✅ *Deal Created!*\n\nDeal ID: \`${dealId}\`\nSeller: @${senderUsername}\nBuyer: @${buyerUsername}\nAmount: ${amount} USDC\nFor: ${description}\n\nShare this Deal ID with @${buyerUsername} to fund.`,
+    { reply_markup: sellerKb, parse_mode: 'Markdown' }
+  );
+
+  // Notify buyer if they have telegram_id
+  const { data: buyerUser } = await supabase.from('users').select('telegram_id').ilike('username', buyerUsername).single();
+  if (buyerUser?.telegram_id) {
+    const buyerKb = new InlineKeyboard().text('Fund Deal', `fund_${dealId}`).text('Check Status', `status_${dealId}`);
+    try {
+      await bot.api.sendMessage(buyerUser.telegram_id, `*New Deal for You*\n\nDeal ID: \`${dealId}\`\nSeller: @${senderUsername}\nAmount: ${amount} USDC\nFor: ${description}\n\nTap below to fund:`, { reply_markup: buyerKb, parse_mode: 'Markdown' });
+    } catch (e) {}
+  }
 });
 
 bot.command('status', async (ctx) => {
   const match = ctx.message.text.match(/^\/status\s+(DP-\w+)$/i);
-  if (!match) return ctx.reply('Usage: /status DP-XXXX');
+  if (!match) return ctx.reply('❌ Usage: `/status DP-XXXX`', { parse_mode: 'Markdown' });
 
   const { deal } = await getDeal(match[1]);
-  if (!deal) return ctx.reply('Deal not found.');
+  if (!deal) return ctx.reply('❌ Deal not found.');
 
   const emoji = { pending_deposit: '⏳', funded: '💰', completed: '✅', disputed: '⚠️', cancelled: '❌', refunded: '↩️' }[deal.status] || '❓';
+  const statusText = { pending_deposit: 'Awaiting Deposit', funded: 'Funded & Active', completed: 'Completed', disputed: 'Disputed', cancelled: 'Cancelled', refunded: 'Refunded' }[deal.status] || deal.status;
+
+  const userId = ctx.from.id;
+  const username = ctx.from.username;
+  const isSeller = deal.seller_telegram_id === userId;
+  const isBuyer = deal.buyer_username.toLowerCase() === username?.toLowerCase();
+
+  let kb = new InlineKeyboard();
+  if (deal.status === 'pending_deposit' && isBuyer) {
+    kb.text('💳 Fund This Deal', `fund_${deal.deal_id}`);
+  } else if (deal.status === 'funded') {
+    if (isBuyer) kb.text('✅ Release Funds', `release_${deal.deal_id}`);
+    if (isSeller || isBuyer) kb.row().text('⚠️ Open Dispute', `dispute_${deal.deal_id}`);
+  } else if ((deal.status === 'completed' || deal.status === 'refunded') && (isSeller || isBuyer)) {
+    kb.text('⭐ Leave Review', `review_${deal.deal_id}`);
+  }
 
   let extra = '';
   if (deal.status === 'disputed') {
-    extra = `\n\n⚠️ DISPUTED\nReason: ${deal.dispute_reason || 'N/A'}`;
-    extra += deal.assigned_to_username ? '\nStatus: Being reviewed' : '\nStatus: Awaiting review';
+    extra = `\n\n⚠️ *DISPUTED*\nReason: ${deal.dispute_reason || 'N/A'}`;
+    extra += deal.assigned_to_username ? '\n🔍 Status: Being reviewed' : '\n⏳ Status: Awaiting review';
   } else if (deal.status === 'funded' && deal.funded_at) {
     const msLeft = new Date(deal.funded_at).getTime() + 24 * 60 * 60 * 1000 - Date.now();
     if (msLeft > 0) {
       const h = Math.floor(msLeft / 3600000);
       const m = Math.floor((msLeft % 3600000) / 60000);
-      extra = `\n\n⏱️ Release window: ${h}h ${m}m remaining`;
+      extra = `\n\n⏱️ Release window: *${h}h ${m}m* remaining`;
     } else {
-      extra = `\n\n⏱️ Release window expired — please /release ${deal.deal_id} or /dispute ${deal.deal_id}`;
+      extra = `\n\n⏱️ Release window expired`;
     }
   }
 
-  await ctx.reply(`${emoji} ${deal.deal_id} - ${deal.status.toUpperCase()}\n\nSeller: @${deal.seller_username}\nBuyer: @${deal.buyer_username}\nAmount: ${deal.amount} USDC\nDesc: ${deal.description}${extra}`);
+  await ctx.reply(`${emoji} *${deal.deal_id}* — ${statusText}\n\n👤 Seller: @${deal.seller_username}\n👤 Buyer: @${deal.buyer_username}\n💵 Amount: *${deal.amount} USDC*\n📝 ${deal.description}${extra}`, { reply_markup: kb, parse_mode: 'Markdown' });
 });
 
 bot.command('deals', async (ctx) => {
@@ -291,18 +727,31 @@ bot.command('deals', async (ctx) => {
     .select('*')
     .or(`seller_telegram_id.eq.${userId},buyer_username.ilike.${username}`)
     .order('created_at', { ascending: false })
-    .limit(15);
+    .limit(10);
 
-  if (error) return ctx.reply('Something went wrong. Please try again shortly.');
-  if (!data?.length) return ctx.reply('No deals. Create: /new');
+  if (error) return ctx.reply('❌ Something went wrong. Please try again shortly.');
+  if (!data?.length) {
+    const kb = new InlineKeyboard().text('💰 Create a Deal', 'guide_sell');
+    return ctx.reply('📭 You have no deals yet.\n\nTap below to get started!', { reply_markup: kb });
+  }
 
-  let msg = 'Your Deals:\n\n';
+  let msg = '📋 *Your Deals:*\n\n';
+  const kb = new InlineKeyboard();
+  let btnCount = 0;
+
   for (const d of data) {
     const emoji = { pending_deposit: '⏳', funded: '💰', completed: '✅', disputed: '⚠️', cancelled: '❌', refunded: '↩️' }[d.status] || '❓';
-    const role = d.seller_telegram_id === userId ? 'S' : 'B';
-    msg += `${emoji} ${d.deal_id} | ${d.amount} USDC | ${role}\n`;
+    const role = d.seller_telegram_id === userId ? '💰 Seller' : '🛒 Buyer';
+    msg += `${emoji} \`${d.deal_id}\` • *${d.amount}* USDC • ${role}\n`;
+
+    // Add buttons for active deals (max 5)
+    if (btnCount < 5 && (d.status === 'pending_deposit' || d.status === 'funded' || d.status === 'disputed')) {
+      kb.text(`${emoji} ${d.deal_id}`, `status_${d.deal_id}`).row();
+      btnCount++;
+    }
   }
-  await ctx.reply(msg);
+
+  await ctx.reply(msg, { reply_markup: kb, parse_mode: 'Markdown' });
 });
 
 bot.command('fund', async (ctx) => {
@@ -325,7 +774,8 @@ bot.command('fund', async (ctx) => {
     const existingId = await escrowContract.externalIdToDealId(deal.deal_id);
     if (existingId.toString() !== '0') {
       await supabase.from('deals').update({ contract_deal_id: deal.deal_id }).ilike('deal_id', deal.deal_id);
-      return ctx.reply(`👇 TAP TO DEPOSIT:\n${FRONTEND_URL}?deal=${deal.deal_id}`);
+      const fundKb = new InlineKeyboard().url('Deposit Now', `${FRONTEND_URL}?deal=${deal.deal_id}`);
+      return ctx.reply(`Ready to deposit!\n\nTap the button below to pay ${deal.amount} USDC.\nYou'll approve the transaction in your wallet.`, { reply_markup: fundKb });
     }
   } catch (e) {}
 
@@ -333,10 +783,11 @@ bot.command('fund', async (ctx) => {
 
   try {
     const tx = await escrowContract.createDeal(deal.deal_id, sellerUser.wallet_address, buyerUser.wallet_address, BigInt(Math.floor(deal.amount * 1e6)));
-    await ctx.reply(`Tx: https://sepolia.basescan.org/tx/${tx.hash}`);
+    await ctx.reply(`Tx: https://basescan.org/tx/${tx.hash}`);
     await waitWithTimeout(tx);
     await supabase.from('deals').update({ contract_deal_id: deal.deal_id, tx_hash: tx.hash }).ilike('deal_id', deal.deal_id);
-    await ctx.reply(`✅ Ready!\n\n👇 TAP TO DEPOSIT:\n${FRONTEND_URL}?deal=${deal.deal_id}`);
+    const fundKb2 = new InlineKeyboard().url('Deposit Now', `${FRONTEND_URL}?deal=${deal.deal_id}`);
+    await ctx.reply(`✅ Ready to deposit!\n\nTap the button below to pay ${deal.amount} USDC.\nYou'll approve the transaction in your wallet.`, { reply_markup: fundKb2 });
   } catch (e) {
     await ctx.reply('Something went wrong. Please try again shortly.');
   }
@@ -638,33 +1089,112 @@ bot.command('rep', async (ctx) => {
 bot.command('adminhelp', async (ctx) => {
   if (!isBotmaster(ctx.from.id)) return ctx.reply('Botmaster only.');
 
-  await ctx.reply(`👑 BOTMASTER COMMANDS
+  const kb = new InlineKeyboard()
+    .text('Disputes', 'admin_disputes')
+    .text('Mods', 'admin_mods')
+    .row()
+    .text('Add Mod', 'admin_addmod')
+    .text('Logs', 'admin_logs');
 
-MOD MANAGEMENT
-/addmod @user
-/removemod @user
-/mods
+  await ctx.reply(`*Admin Panel* 👑\n\nSelect an action or use commands:\n\n/addmod @user • /removemod @user\n/assign DP-XXXX @mod • /unassign DP-XXXX\n/resolve DP-XXXX release|refund\n/msg DP-XXXX seller|buyer [msg]`, { reply_markup: kb, parse_mode: 'Markdown' });
+});
 
-DISPUTES
-/disputes - All open disputes
-/assign DP-XXXX @mod
-/unassign DP-XXXX
-/viewevidence DP-XXXX
-/resolve DP-XXXX release|refund
+bot.callbackQuery('admin_disputes', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  if (!isBotmaster(ctx.from.id)) return;
 
-COMMUNICATION
-/msg DP-XXXX seller|buyer [msg]
-/broadcast DP-XXXX [msg]
+  const { data } = await supabase.from('deals').select('*').eq('status', 'disputed').order('created_at', { ascending: false });
+  if (!data?.length) return ctx.reply('No open disputes.');
 
-AUDIT
-/logs
-/logs DP-XXXX`);
+  let msg = `*Open Disputes (${data.length}):*\n\n`;
+  for (const d of data) {
+    const assigned = d.assigned_to_username ? `@${d.assigned_to_username}` : 'Unassigned';
+    msg += `\`${d.deal_id}\` | ${d.amount} USDC | ${assigned}\n`;
+  }
+  const kb = new InlineKeyboard().text('Back', 'admin_back');
+  await ctx.reply(msg, { reply_markup: kb, parse_mode: 'Markdown' });
+});
+
+bot.callbackQuery('admin_mods', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  if (!isBotmaster(ctx.from.id)) return;
+
+  const { data } = await supabase.from('moderators').select('*').eq('is_active', true);
+  if (!data?.length) return ctx.reply('No moderators. Use /addmod @username');
+
+  let msg = '*Moderators:*\n\n';
+  for (const m of data) msg += `@${m.username}\n`;
+  const kb = new InlineKeyboard().text('Add Mod', 'admin_addmod').text('Back', 'admin_back');
+  await ctx.reply(msg, { reply_markup: kb, parse_mode: 'Markdown' });
+});
+
+bot.callbackQuery('admin_addmod', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  if (!isBotmaster(ctx.from.id)) return;
+  const kb = new InlineKeyboard().text('Back', 'admin_back');
+  await ctx.reply(`*Add Moderator*\n\nType: \`/addmod @username\``, { reply_markup: kb, parse_mode: 'Markdown' });
+});
+
+bot.callbackQuery('admin_logs', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  if (!isBotmaster(ctx.from.id)) return;
+
+  const { data } = await supabase.from('admin_logs').select('*').order('created_at', { ascending: false }).limit(10);
+  if (!data?.length) return ctx.reply('No logs found.');
+
+  let msg = '*Recent Logs:*\n\n';
+  for (const l of data) {
+    msg += `@${l.admin_username}: ${l.action}${l.deal_id ? ` (${l.deal_id})` : ''}\n`;
+  }
+  const kb = new InlineKeyboard().text('Back', 'admin_back');
+  await ctx.reply(msg, { reply_markup: kb, parse_mode: 'Markdown' });
+});
+
+bot.callbackQuery('admin_back', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  if (!isBotmaster(ctx.from.id)) return;
+  const kb = new InlineKeyboard()
+    .text('Disputes', 'admin_disputes')
+    .text('Mods', 'admin_mods')
+    .row()
+    .text('Add Mod', 'admin_addmod')
+    .text('Logs', 'admin_logs');
+  await ctx.reply(`*Admin Panel* 👑`, { reply_markup: kb, parse_mode: 'Markdown' });
 });
 
 bot.command('modhelp', async (ctx) => {
   const { isAdmin } = await isAnyAdmin(ctx);
   if (!isAdmin) return ctx.reply('Admin only.');
-  await ctx.reply(`🛡️ MOD COMMANDS\n\n/mydisputes\n/viewevidence DP-XXXX\n/msg DP-XXXX seller|buyer [msg]\n/resolve DP-XXXX release|refund`);
+
+  const kb = new InlineKeyboard()
+    .text('My Disputes', 'mod_mydisputes')
+    .text('Help', 'guide_help');
+
+  await ctx.reply(`*Mod Panel* 🛡️\n\nCommands:\n/mydisputes • /viewevidence DP-XXXX\n/msg DP-XXXX seller|buyer [msg]\n/resolve DP-XXXX release|refund`, { reply_markup: kb, parse_mode: 'Markdown' });
+});
+
+bot.callbackQuery('mod_mydisputes', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const { isAdmin } = await isAnyAdmin(ctx);
+  if (!isAdmin) return;
+
+  const { data } = await supabase.from('deals').select('*').eq('status', 'disputed').eq('assigned_to_telegram_id', ctx.from.id);
+  if (!data?.length) return ctx.reply('No disputes assigned to you.');
+
+  let msg = `*Your Disputes (${data.length}):*\n\n`;
+  for (const d of data) {
+    msg += `\`${d.deal_id}\` | ${d.amount} USDC\n@${d.seller_username} vs @${d.buyer_username}\n\n`;
+  }
+  const kb = new InlineKeyboard().text('Back', 'mod_back');
+  await ctx.reply(msg, { reply_markup: kb, parse_mode: 'Markdown' });
+});
+
+bot.callbackQuery('mod_back', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const kb = new InlineKeyboard()
+    .text('My Disputes', 'mod_mydisputes')
+    .text('Help', 'guide_help');
+  await ctx.reply(`*Mod Panel* 🛡️`, { reply_markup: kb, parse_mode: 'Markdown' });
 });
 
 bot.command('addmod', async (ctx) => {
@@ -896,7 +1426,7 @@ bot.command('resolve', async (ctx) => {
       } else {
         tx = await escrowContract.refund(onChain.chainId);
       }
-      await ctx.reply(`Tx: https://sepolia.basescan.org/tx/${tx.hash}`);
+      await ctx.reply(`Tx: https://basescan.org/tx/${tx.hash}`);
       await waitWithTimeout(tx);
       await ctx.reply('✅ On-chain resolved.');
     } catch (e) {
@@ -919,14 +1449,15 @@ bot.command('resolve', async (ctx) => {
   await logAdminAction('resolve', deal.deal_id, ctx.from.id, ctx.from.username, null, decision);
   await ctx.reply(`⚖️ ${deal.deal_id}: ${decision === 'release' ? 'Released to seller' : 'Refunded to buyer'}\n\nStatus updated to: ${newStatus}`);
 
+  const resolveReviewKb = new InlineKeyboard().text('Review this deal', `review_${deal.deal_id}`);
   const sellerMsg = decision === 'release' ? '✅ Funds released to you!' : '❌ Refunded to buyer.';
   const buyerMsg = decision === 'refund' ? '✅ Funds refunded to you!' : '❌ Released to seller.';
 
-  try { await bot.api.sendMessage(deal.seller_telegram_id, `⚖️ ${deal.deal_id}\n\n${sellerMsg}`); } catch (e) {}
+  try { await bot.api.sendMessage(deal.seller_telegram_id, `⚖️ ${deal.deal_id}\n\n${sellerMsg}`, { reply_markup: resolveReviewKb }); } catch (e) {}
 
   const { data: buyerUser } = await supabase.from('users').select('telegram_id').ilike('username', deal.buyer_username).single();
   if (buyerUser?.telegram_id) {
-    try { await bot.api.sendMessage(buyerUser.telegram_id, `⚖️ ${deal.deal_id}\n\n${buyerMsg}`); } catch (e) {}
+    try { await bot.api.sendMessage(buyerUser.telegram_id, `⚖️ ${deal.deal_id}\n\n${buyerMsg}`, { reply_markup: resolveReviewKb }); } catch (e) {}
   }
 });
 
@@ -985,7 +1516,10 @@ async function pollDeals() {
           if (deal.seller_telegram_id) try { await bot.api.sendMessage(deal.seller_telegram_id, `💰 ${deal.deal_id} FUNDED!\n\n${deal.amount} USDC locked.`); } catch (e) {}
 
           const { data: buyer } = await supabase.from('users').select('telegram_id').ilike('username', deal.buyer_username).single();
-          if (buyer?.telegram_id) try { await bot.api.sendMessage(buyer.telegram_id, `✅ ${deal.deal_id} deposited!\n\nPlease /release ${deal.deal_id} or /dispute ${deal.deal_id} within 24 hours.`); } catch (e) {}
+          if (buyer?.telegram_id) {
+            const fundedKb = new InlineKeyboard().text('Release Funds', `release_${deal.deal_id}`).text('Dispute', `dispute_${deal.deal_id}`);
+            try { await bot.api.sendMessage(buyer.telegram_id, `✅ *${deal.deal_id} Funded!*\n\nAmount: ${deal.amount} USDC\n\nOnce you receive the service/item, tap Release. If there's a problem, tap Dispute.`, { reply_markup: fundedKb, parse_mode: 'Markdown' }); } catch (e) {}
+          }
         }
       } catch (e) {}
     }
@@ -1006,10 +1540,11 @@ async function pollDeals() {
           console.log(`Completed on-chain: ${deal.deal_id}`);
           await supabase.from('deals').update({ status: 'completed', completed_at: new Date().toISOString() }).ilike('deal_id', deal.deal_id);
 
-          if (deal.seller_telegram_id) try { await bot.api.sendMessage(deal.seller_telegram_id, `✅ ${deal.deal_id}\n\nFunds released to you!`); } catch (e) {}
+          const reviewKb = new InlineKeyboard().text(`Review this deal`, `review_${deal.deal_id}`);
+          if (deal.seller_telegram_id) try { await bot.api.sendMessage(deal.seller_telegram_id, `✅ ${deal.deal_id} — Deal Complete!\n\nFunds released to you.\n\nLeave a review for the buyer:`, { reply_markup: reviewKb }); } catch (e) {}
 
           const { data: buyer } = await supabase.from('users').select('telegram_id').ilike('username', deal.buyer_username).single();
-          if (buyer?.telegram_id) try { await bot.api.sendMessage(buyer.telegram_id, `✅ ${deal.deal_id}\n\nDeal completed! Funds released to seller.`); } catch (e) {}
+          if (buyer?.telegram_id) try { await bot.api.sendMessage(buyer.telegram_id, `✅ ${deal.deal_id} — Deal Complete!\n\nFunds released to seller.\n\nLeave a review for the seller:`, { reply_markup: reviewKb }); } catch (e) {}
         }
       } catch (e) {}
     }
