@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DealPact - Secure Escrow Payment</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js" integrity="sha384-Htz1SE4Sl5aitpvFgr2j0sfsGUIuSXI6t8hEyrlQ93zflEF3a29bH2AvkUROUw7J" crossorigin="anonymous"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -287,24 +286,56 @@
 
         .hidden { display: none !important; }
 
-        /* Wallet badge */
-        .wallet-badge {
-            display: inline-flex;
+        /* Wallet header */
+        .wallet-header {
+            display: flex;
             align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
-            background: rgba(0,255,136,0.1);
-            border-radius: 20px;
-            font-size: 0.75rem;
-            color: #00ff88;
+            justify-content: space-between;
             margin-bottom: 16px;
+            padding: 10px 14px;
+            background: rgba(0,255,136,0.08);
+            border: 1px solid rgba(0,255,136,0.15);
+            border-radius: 12px;
         }
-        .wallet-badge::before {
-            content: "";
-            width: 6px;
-            height: 6px;
+        .wallet-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .wallet-dot {
+            width: 8px;
+            height: 8px;
             background: #00ff88;
             border-radius: 50%;
+            box-shadow: 0 0 8px rgba(0,255,136,0.6);
+        }
+        .wallet-addr {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #fff;
+        }
+        .wallet-network {
+            font-size: 0.65rem;
+            color: #00ff88;
+            background: rgba(0,255,136,0.15);
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 4px;
+        }
+        .disconnect-btn {
+            background: none;
+            border: 1px solid rgba(255,255,255,0.15);
+            color: #888;
+            font-size: 0.7rem;
+            padding: 5px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .disconnect-btn:hover {
+            border-color: #ff4757;
+            color: #ff4757;
+            background: rgba(255,71,87,0.1);
         }
 
         /* Social Proof */
@@ -331,89 +362,6 @@
             color: #666;
             text-transform: uppercase;
         }
-
-
-        /* Wallet selector modal */
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.7);
-            z-index: 100;
-            align-items: center;
-            justify-content: center;
-        }
-        .modal-overlay.active { display: flex; }
-        .modal {
-            background: #1a1a2e;
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 16px;
-            padding: 24px;
-            width: 90%;
-            max-width: 380px;
-        }
-        .modal-title {
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin-bottom: 16px;
-            text-align: center;
-        }
-        .wallet-list {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .wallet-btn {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 14px 16px;
-            border-radius: 12px;
-            border: 1px solid rgba(255,255,255,0.1);
-            background: rgba(255,255,255,0.03);
-            color: #fff;
-            font-size: 0.95rem;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .wallet-btn:hover {
-            background: rgba(255,255,255,0.08);
-            border-color: #00d9ff;
-        }
-        .wallet-btn img {
-            width: 28px;
-            height: 28px;
-            border-radius: 6px;
-        }
-        .wallet-btn .wallet-name { font-weight: 500; }
-        .wallet-btn .wallet-tag {
-            margin-left: auto;
-            font-size: 0.7rem;
-            color: #00ff88;
-            background: rgba(0,255,136,0.1);
-            padding: 2px 8px;
-            border-radius: 10px;
-        }
-        .modal-cancel {
-            width: 100%;
-            padding: 12px;
-            margin-top: 12px;
-            border-radius: 12px;
-            border: none;
-            background: rgba(255,255,255,0.05);
-            color: #888;
-            font-size: 0.9rem;
-            cursor: pointer;
-        }
-        .modal-cancel:hover { background: rgba(255,255,255,0.1); }
-        .no-wallets {
-            text-align: center;
-            color: #888;
-            font-size: 0.85rem;
-            padding: 16px 0;
-        }
-        .no-wallets a { color: #00d9ff; text-decoration: none; }
-        .no-wallets a:hover { text-decoration: underline; }
         .footer {
             text-align: center;
             padding: 24px 0 8px;
@@ -429,6 +377,7 @@
         }
         .footer a:hover { color: #00d9ff; }
     </style>
+  <script type="module" crossorigin src="/DealPact/assets/index-BesH8_bk.js"></script>
 </head>
 <body>
     <div class="container">
@@ -506,23 +455,21 @@
 
                 <!-- Wallet Connect -->
                 <div id="connect-section">
-                    <button class="btn btn-primary" id="connect-btn" onclick="showWalletModal()">
+                    <button class="btn btn-primary" id="connect-btn" onclick="openConnectModal()">
                         Connect Wallet
                     </button>
                 </div>
 
-                <!-- Wallet Selector Modal -->
-                <div class="modal-overlay" id="wallet-modal">
-                    <div class="modal">
-                        <div class="modal-title">Connect Wallet</div>
-                        <div class="wallet-list" id="wallet-list"></div>
-                        <button class="modal-cancel" onclick="hideWalletModal()">Cancel</button>
-                    </div>
-                </div>
-
                 <!-- Balance & Actions -->
                 <div id="action-section" class="hidden">
-                    <div class="wallet-badge" id="wallet-addr">0x...</div>
+                    <div class="wallet-header">
+                        <div class="wallet-info">
+                            <div class="wallet-dot"></div>
+                            <span class="wallet-addr" id="wallet-addr">0x...</span>
+                            <span class="wallet-network">Base</span>
+                        </div>
+                        <button class="disconnect-btn" onclick="disconnectWallet()">Disconnect</button>
+                    </div>
 
                     <div class="balance-card">
                         <div class="balance-label">Your USDC Balance</div>
@@ -572,586 +519,6 @@
         </div>
     </div>
 
-    <script>
-        // Configuration
-        const CONFIG = {
-            CONTRACT: '0x116511753bf00671bc321f2e3364159Fe502ed22',
-            USDC: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-            RPC: 'https://mainnet.base.org',
-            CHAIN_ID: 8453,
-            EXPLORER: 'https://basescan.org'
-        };
-
-        // ABIs
-        const ESCROW_ABI = [
-            "function deposit(uint256 _dealId) external",
-            "function getDealByExternalId(string) view returns (tuple(string,address,address,uint256,uint8,uint256,uint256))",
-            "function externalIdToDealId(string) view returns (uint256)"
-        ];
-        const RELEASE_ABI = [
-            "function release(uint256 _dealId) external"
-        ];
-        const ERC20_ABI = [
-            "function approve(address,uint256) returns (bool)",
-            "function allowance(address,address) view returns (uint256)",
-            "function balanceOf(address) view returns (uint256)"
-        ];
-
-        // State
-        let state = {
-            deal: null,
-            signer: null,
-            address: null,
-            action: 'deposit' // 'deposit' or 'release'
-        };
-
-        // Helpers
-        const $ = id => document.getElementById(id);
-        const show = id => $(id)?.classList.remove('hidden');
-        const hide = id => $(id)?.classList.add('hidden');
-        const short = addr => addr ? `${addr.slice(0,6)}...${addr.slice(-4)}` : '';
-
-        function showAlert(id, msg, type) {
-            const el = $(id);
-            el.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
-        }
-        function clearAlert(id) { $(id).innerHTML = ''; }
-
-        function setLoading(btnId, loading) {
-            const btn = $(btnId);
-            btn.disabled = loading;
-            loading ? btn.classList.add('btn-loading') : btn.classList.remove('btn-loading');
-        }
-
-        function setStep(num) {
-            for (let i = 1; i <= 3; i++) {
-                const step = $(`step-${i}`);
-                step.classList.remove('active', 'done');
-                if (i < num) step.classList.add('done');
-                if (i === num) step.classList.add('active');
-            }
-        }
-
-        // Search Deal
-        async function searchDeal() {
-            const input = $('deal-input').value.trim().toUpperCase();
-
-            if (!input.match(/^DP-[A-Z0-9]{4}$/)) {
-                showAlert('search-alert', 'Enter a valid deal ID (DP-XXXX)', 'error');
-                return;
-            }
-
-            setLoading('search-btn', true);
-            clearAlert('search-alert');
-
-            try {
-                const provider = new ethers.providers.JsonRpcProvider(CONFIG.RPC);
-                const contract = new ethers.Contract(CONFIG.CONTRACT, ESCROW_ABI, provider);
-
-                const chainId = await contract.externalIdToDealId(input);
-
-                if (chainId.toString() === '0') {
-                    showAlert('search-alert', 'Deal not on blockchain yet. Ask seller to run /fund first.', 'warning');
-                    setLoading('search-btn', false);
-                    return;
-                }
-
-                const deal = await contract.getDealByExternalId(input);
-                const status = deal[4];
-                const statuses = ['Pending', 'Funded', 'Completed', 'Refunded', 'Disputed', 'Cancelled'];
-
-                // Check if this is a release action
-                const params = new URLSearchParams(window.location.search);
-                const actionParam = params.get('action');
-                state.action = actionParam === 'release' ? 'release' : 'deposit';
-
-                // Check if this is a bot-initiated release
-                if (state.action === 'release') {
-                    if (status !== 1) {
-                        showAlert('search-alert', `Cannot release. Deal status is "${statuses[status]}".`, 'warning');
-                        setLoading('search-btn', false);
-                        return;
-                    }
-                }
-
-                // Save deal info
-                state.deal = {
-                    id: input,
-                    chainId: chainId.toString(),
-                    seller: deal[1],
-                    buyer: deal[2],
-                    amount: deal[3],
-                    status: status
-                };
-
-                // Update UI
-                $('disp-deal-id').textContent = input;
-                $('disp-amount').textContent = ethers.utils.formatUnits(deal[3], 6);
-                $('disp-seller').textContent = short(deal[1]);
-                $('disp-buyer').textContent = short(deal[2]);
-
-                // Update status badge based on deal status
-                const statusBadge = document.querySelector('.deal-status');
-                const statusStyles = {
-                    0: { text: 'Awaiting Payment', bg: 'rgba(255,193,7,0.2)', color: '#ffc107' },
-                    1: { text: 'Funded', bg: 'rgba(0,217,255,0.2)', color: '#00d9ff' },
-                    2: { text: 'Completed', bg: 'rgba(0,255,136,0.2)', color: '#00ff88' },
-                    3: { text: 'Refunded', bg: 'rgba(255,71,87,0.2)', color: '#ff4757' },
-                    4: { text: 'Disputed', bg: 'rgba(255,193,7,0.2)', color: '#ffc107' },
-                    5: { text: 'Cancelled', bg: 'rgba(255,71,87,0.2)', color: '#ff4757' }
-                };
-                const style = statusStyles[status] || statusStyles[0];
-                statusBadge.textContent = style.text;
-                statusBadge.style.background = style.bg;
-                statusBadge.style.color = style.color;
-
-                // Show deal section
-                hide('search-section');
-                show('deal-section');
-
-                // Handle what the user can do based on status
-                if (state.action === 'release' && status === 1) {
-                    // Bot-initiated release
-                    $('step-2').querySelector('.step-text').textContent = 'Confirm';
-                    $('step-3').querySelector('.step-text').textContent = 'Release';
-                    setStep(1);
-                } else if (status === 0) {
-                    // Pending — show deposit flow
-                    setStep(1);
-                } else {
-                    // Funded/Completed/Refunded/Disputed/Cancelled — view only
-                    hide('connect-section');
-                    const statusMessages = {
-                        1: 'Funds locked. After delivery, use <strong>/release ' + input + '</strong> in the bot to get your release link.',
-                        2: 'This deal is complete. Funds have been released to the seller.',
-                        3: 'This deal has been refunded to the buyer.',
-                        4: 'This deal is under dispute. Awaiting admin resolution.',
-                        5: 'This deal has been cancelled.'
-                    };
-                    showAlert('action-alert', statusMessages[status], status === 2 ? 'success' : 'info');
-                }
-
-            } catch (e) {
-                console.error('Search error:', e);
-                showAlert('search-alert', 'Error: ' + (e.reason || e.message || 'Connection failed. Check your internet.'), 'error');
-            }
-
-            setLoading('search-btn', false);
-        }
-
-        // Detect mobile device
-        function isMobile() {
-            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        }
-
-        // Get current page URL for deep links
-        function getCurrentUrl() {
-            return window.location.href;
-        }
-
-        // Detect available wallets
-        function getAvailableWallets() {
-            const wallets = [];
-            const seen = new Set();
-            const url = getCurrentUrl();
-
-            const knownWallets = [
-                { flag: 'isMetaMask', name: 'MetaMask', icon: 'https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg' },
-                { flag: 'isRabby', name: 'Rabby', icon: 'https://rabby.io/assets/images/logo.svg' },
-                { flag: 'isCoinbaseWallet', name: 'Coinbase Wallet', icon: 'https://avatars.githubusercontent.com/u/18060234?s=200&v=4' },
-                { flag: 'isTrust', name: 'Trust Wallet', icon: 'https://trustwallet.com/assets/images/media/assets/trust_platform.svg' },
-                { flag: 'isOkxWallet', name: 'OKX Wallet', icon: 'https://static.okx.com/cdn/assets/imgs/226/EB771F0FEE8E5B02.png' },
-                { flag: 'isBraveWallet', name: 'Brave Wallet', icon: 'https://brave.com/static-assets/images/brave-logo-sans-text.svg' }
-            ];
-
-            function addFromProvider(p) {
-                for (const w of knownWallets) {
-                    if (p[w.flag] && !seen.has(w.name)) {
-                        // Skip MetaMask flag if Rabby is pretending to be MetaMask
-                        if (w.flag === 'isMetaMask' && p.isRabby) continue;
-                        seen.add(w.name);
-                        wallets.push({ name: w.name, icon: w.icon, tag: 'Detected', provider: p });
-                    }
-                }
-            }
-
-            // Check providers array (multiple wallets installed)
-            if (window.ethereum?.providers?.length) {
-                for (const p of window.ethereum.providers) {
-                    addFromProvider(p);
-                }
-            }
-
-            // Check window.ethereum itself
-            if (window.ethereum) {
-                addFromProvider(window.ethereum);
-            }
-
-            // Check separate globals
-            const globals = [
-                { global: 'rabby', flag: 'isRabby' },
-                { global: 'okxwallet', flag: 'isOkxWallet' },
-                { global: 'trustwallet', flag: 'isTrust' },
-                { global: 'coinbaseWalletExtension', flag: 'isCoinbaseWallet' },
-                { global: 'braveEthereum', flag: 'isBraveWallet' }
-            ];
-            for (const g of globals) {
-                if (window[g.global] && !seen.has(knownWallets.find(w => w.flag === g.flag)?.name)) {
-                    const w = knownWallets.find(w => w.flag === g.flag);
-                    if (w) {
-                        seen.add(w.name);
-                        wallets.push({ name: w.name, icon: w.icon, tag: 'Detected', provider: window[g.global] });
-                    }
-                }
-            }
-
-            // Generic fallback
-            if (window.ethereum && wallets.length === 0) {
-                wallets.push({ name: 'Browser Wallet', icon: '', tag: 'Detected', provider: window.ethereum });
-            }
-
-            // Deep link options for mobile without injected wallet
-            if (wallets.length === 0 && isMobile()) {
-                wallets.push({ name: 'MetaMask', icon: 'https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg', tag: 'Open App', deepLink: `https://metamask.app.link/dapp/${url.replace('https://', '')}` });
-                wallets.push({ name: 'Coinbase Wallet', icon: 'https://avatars.githubusercontent.com/u/18060234?s=200&v=4', tag: 'Open App', deepLink: `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(url)}` });
-            }
-
-            return wallets;
-        }
-
-        function showWalletModal() {
-            const wallets = getAvailableWallets();
-            const list = $('wallet-list');
-            list.innerHTML = '';
-
-            if (wallets.length === 0) {
-                list.innerHTML = '<div class="no-wallets">No wallets detected.<br><a href="https://metamask.io/download/" target="_blank">Install MetaMask</a></div>';
-            } else {
-                for (const w of wallets) {
-                    const btn = document.createElement('button');
-                    btn.className = 'wallet-btn';
-                    btn.innerHTML = `${w.icon ? `<img src="${w.icon}" alt="${w.name}">` : ''}<span class="wallet-name">${w.name}</span><span class="wallet-tag">${w.tag}</span>`;
-                    if (w.deepLink) {
-                        btn.onclick = () => { window.location.href = w.deepLink; };
-                    } else {
-                        btn.onclick = () => { hideWalletModal(); connectWallet(w.provider); };
-                    }
-                    list.appendChild(btn);
-                }
-            }
-
-            $('wallet-modal').classList.add('active');
-        }
-
-        function hideWalletModal() {
-            $('wallet-modal').classList.remove('active');
-        }
-
-        // Close modal on overlay click
-        $('wallet-modal')?.addEventListener('click', (e) => {
-            if (e.target === $('wallet-modal')) hideWalletModal();
-        });
-
-        // Connect Wallet with selected provider
-        async function connectWallet(selectedProvider) {
-            const ethProvider = selectedProvider || window.ethereum;
-            if (!ethProvider) {
-                showAlert('action-alert', 'No wallet detected.', 'warning');
-                return;
-            }
-
-            setLoading('connect-btn', true);
-            clearAlert('action-alert');
-
-            try {
-                let provider = new ethers.providers.Web3Provider(ethProvider);
-                await provider.send("eth_requestAccounts", []);
-
-                // Check network
-                const network = await provider.getNetwork();
-                if (network.chainId !== CONFIG.CHAIN_ID) {
-                    showAlert('action-alert', 'Switching to Base...', 'info');
-                    try {
-                        await ethProvider.request({
-                            method: 'wallet_switchEthereumChain',
-                            params: [{ chainId: '0x14A34' }]
-                        });
-                    } catch (switchErr) {
-                        if (switchErr.code === 4902) {
-                            await ethProvider.request({
-                                method: 'wallet_addEthereumChain',
-                                params: [{
-                                    chainId: '0x14A34',
-                                    chainName: 'Base',
-                                    nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
-                                    rpcUrls: [CONFIG.RPC],
-                                    blockExplorerUrls: [CONFIG.EXPLORER]
-                                }]
-                            });
-                        }
-                    }
-                    provider = new ethers.providers.Web3Provider(ethProvider);
-                }
-
-                state.signer = provider.getSigner();
-                state.address = await state.signer.getAddress();
-
-                // Verify buyer address
-                if (state.address.toLowerCase() !== state.deal.buyer.toLowerCase()) {
-                    showAlert('action-alert', `Wrong wallet! This deal requires: ${short(state.deal.buyer)}`, 'error');
-                    setLoading('connect-btn', false);
-                    return;
-                }
-
-                // Update wallet display
-                $('wallet-addr').textContent = short(state.address);
-
-                // Handle release vs deposit flow
-                if (state.action === 'release') {
-                    // Release mode - just show the release button
-                    hide('connect-section');
-                    show('action-section');
-                    hide('approve-btn');
-                    hide('deposit-btn');
-                    show('release-btn');
-                    // Hide balance card for release
-                    document.querySelector('.balance-card').style.display = 'none';
-                    setStep(3);
-                    showAlert('action-alert', 'Ready to release funds to seller. Click the button below.', 'success');
-                } else {
-                    // Deposit mode - check balance and allowance
-                    const usdc = new ethers.Contract(CONFIG.USDC, ERC20_ABI, state.signer);
-                    const balance = await usdc.balanceOf(state.address);
-                    const balanceNum = parseFloat(ethers.utils.formatUnits(balance, 6));
-                    const requiredNum = parseFloat(ethers.utils.formatUnits(state.deal.amount, 6));
-
-                    $('balance-val').textContent = `${balanceNum.toFixed(2)} USDC`;
-
-                    if (balance.lt(state.deal.amount)) {
-                        $('balance-val').classList.add('balance-low');
-                        $('balance-val').classList.remove('balance-ok');
-                        showAlert('action-alert', `Insufficient balance! You need ${requiredNum} USDC.`, 'error');
-                        hide('connect-section');
-                        show('action-section');
-                        $('approve-btn').disabled = true;
-                        setLoading('connect-btn', false);
-                        return;
-                    }
-
-                    $('balance-val').classList.add('balance-ok');
-                    $('balance-val').classList.remove('balance-low');
-
-                    // Check allowance
-                    const allowance = await usdc.allowance(state.address, CONFIG.CONTRACT);
-
-                    hide('connect-section');
-                    show('action-section');
-
-                    if (allowance.gte(state.deal.amount)) {
-                        // Already approved, skip to deposit
-                        hide('approve-btn');
-                        show('deposit-btn');
-                        setStep(3);
-
-                        // On mobile wallet browser, auto-prompt deposit after a short delay
-                        if (isWalletBrowser()) {
-                            showAlert('action-alert', 'USDC already approved! Tap the button below to deposit.', 'success');
-                        } else {
-                            showAlert('action-alert', 'USDC already approved. Ready to deposit!', 'success');
-                        }
-                    } else {
-                        show('approve-btn');
-                        hide('deposit-btn');
-                        setStep(2);
-
-                        // On mobile wallet browser, make it clearer what to do
-                        if (isWalletBrowser()) {
-                            showAlert('action-alert', 'Wallet connected! Tap "Approve USDC" to continue.', 'success');
-                        } else {
-                            showAlert('action-alert', 'Wallet connected! Now approve USDC.', 'success');
-                        }
-                    }
-                }
-
-            } catch (e) {
-                console.error(e);
-                showAlert('action-alert', 'Failed to connect wallet', 'error');
-            }
-
-            setLoading('connect-btn', false);
-        }
-
-        // Approve USDC
-        async function approveUSDC() {
-            setLoading('approve-btn', true);
-            showAlert('action-alert', 'Confirm approval in your wallet...', 'info');
-
-            try {
-                const usdc = new ethers.Contract(CONFIG.USDC, ERC20_ABI, state.signer);
-                const tx = await usdc.approve(CONFIG.CONTRACT, state.deal.amount);
-
-                showAlert('action-alert', 'Waiting for confirmation...', 'info');
-                await tx.wait();
-
-                hide('approve-btn');
-                show('deposit-btn');
-                setStep(3);
-                showAlert('action-alert', 'Approved! Now deposit to lock funds.', 'success');
-
-            } catch (e) {
-                console.error(e);
-                if (e.code === 4001) {
-                    showAlert('action-alert', 'Transaction cancelled', 'warning');
-                } else {
-                    showAlert('action-alert', 'Approval failed. Try again.', 'error');
-                }
-            }
-
-            setLoading('approve-btn', false);
-        }
-
-        // Deposit USDC
-        async function depositUSDC() {
-            setLoading('deposit-btn', true);
-            showAlert('action-alert', 'Confirm deposit in your wallet...', 'info');
-
-            try {
-                const escrow = new ethers.Contract(CONFIG.CONTRACT, ESCROW_ABI, state.signer);
-                const tx = await escrow.deposit(state.deal.chainId);
-
-                showAlert('action-alert', 'Processing payment...', 'info');
-                await tx.wait();
-
-                // Success!
-                $('success-deal').textContent = state.deal.id;
-                $('success-amount').textContent = ethers.utils.formatUnits(state.deal.amount, 6) + ' USDC';
-                $('tx-link').href = `${CONFIG.EXPLORER}/tx/${tx.hash}`;
-
-                hide('deal-section');
-                show('success-section');
-
-            } catch (e) {
-                console.error(e);
-                if (e.code === 4001) {
-                    showAlert('action-alert', 'Transaction cancelled', 'warning');
-                } else {
-                    showAlert('action-alert', 'Deposit failed: ' + (e.reason || e.message), 'error');
-                }
-            }
-
-            setLoading('deposit-btn', false);
-        }
-
-        // Release Funds (buyer releases to seller)
-        async function releaseFunds() {
-            setLoading('release-btn', true);
-            showAlert('action-alert', 'Confirm release in your wallet...', 'info');
-
-            try {
-                const escrow = new ethers.Contract(CONFIG.CONTRACT, RELEASE_ABI, state.signer);
-                const tx = await escrow.release(state.deal.chainId);
-
-                showAlert('action-alert', 'Processing release...', 'info');
-                await tx.wait();
-
-                // Success!
-                $('success-deal').textContent = state.deal.id;
-                const amount = ethers.utils.formatUnits(state.deal.amount, 6);
-                const fee = (parseFloat(amount) * 0.015).toFixed(2);
-                const sellerReceives = (parseFloat(amount) - parseFloat(fee)).toFixed(2);
-                $('success-amount').textContent = `${sellerReceives} USDC (after 1.5% fee)`;
-                $('tx-link').href = `${CONFIG.EXPLORER}/tx/${tx.hash}`;
-
-                // Update success section text for release
-                document.querySelector('.success-icon').textContent = '💸';
-                document.querySelector('#success-section h2').textContent = 'Funds Released!';
-                document.querySelector('#success-section p').textContent = 'Payment has been sent to the seller.';
-
-                hide('deal-section');
-                show('success-section');
-
-            } catch (e) {
-                console.error(e);
-                if (e.code === 4001) {
-                    showAlert('action-alert', 'Transaction cancelled', 'warning');
-                } else {
-                    showAlert('action-alert', 'Release failed: ' + (e.reason || e.message), 'error');
-                }
-            }
-
-            setLoading('release-btn', false);
-        }
-
-        // Go back
-        function goBack() {
-            hide('deal-section');
-            show('search-section');
-            hide('action-section');
-            show('connect-section');
-            hide('release-btn');
-            clearAlert('action-alert');
-            setStep(1);
-            state.signer = null;
-            state.address = null;
-            state.action = 'deposit';
-            // Reset balance card visibility
-            document.querySelector('.balance-card').style.display = 'block';
-        }
-
-
-
-        // Detect if we're in a wallet browser (MetaMask, Rabby, etc.)
-        function isWalletBrowser() {
-            if (!window.ethereum) return false;
-            // MetaMask mobile browser
-            if (window.ethereum.isMetaMask) return true;
-            // Rabby
-            if (window.ethereum.isRabby) return true;
-            // Trust Wallet
-            if (window.ethereum.isTrust) return true;
-            // Coinbase Wallet
-            if (window.ethereum.isCoinbaseWallet) return true;
-            // Generic check - if ethereum is injected on mobile, we're probably in a wallet browser
-            if (isMobile() && window.ethereum) return true;
-            return false;
-        }
-
-        // Auto-connect when in wallet browser
-        async function autoConnectIfWalletBrowser() {
-            if (!isWalletBrowser()) return;
-
-            // Small delay to ensure page is fully loaded
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            // If we're on the deal section and connect button is visible, auto-click it
-            if (!$('deal-section').classList.contains('hidden') &&
-                !$('connect-section').classList.contains('hidden')) {
-                console.log('Wallet browser detected, auto-connecting...');
-                connectWallet(window.ethereum);
-            }
-        }
-
-        // Auto-load from URL
-        window.onload = async function() {
-
-            // Check for deal in URL
-            const params = new URLSearchParams(window.location.search);
-            const deal = params.get('deal');
-            if (deal) {
-                $('deal-input').value = deal.toUpperCase();
-                await searchDeal();
-
-                // Auto-connect if in wallet browser
-                autoConnectIfWalletBrowser();
-            }
-        };
-
-        // Format input as user types
-        $('deal-input').addEventListener('input', function(e) {
-            let val = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '');
-            e.target.value = val;
-        });
-    </script>
     <div class="footer">
         <a href="terms.html">Terms of Service</a> | <a href="privacy.html">Privacy Policy</a>
     </div>
